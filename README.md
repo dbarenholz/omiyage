@@ -1,107 +1,47 @@
 # Omiyage
 
-A selfhosted wishlist application, created solely by vibe coding as an experiment, and to learn how to use these technologies.
+A selfhosted wishlist application, created largely by vibe coding as an experiment.
 Choice of technology is my own, namely Spring Boot for the backend and SvelteKit for the frontend.
-This because I'm relatively familiar with them, and the hope was that I could fix hallucinations faster than with tech I'm less familiar with.
-Everything below this line is originally LLM generated -- use with caution.
+This because I'm relatively familiar with them, so that I can fix hallucinations.
+
 
 ## Features
 
-- **Passwordless auth** — sign up to receive a 16-digit account number; that's your login. Nothing to leak.
-- **Multiple wishlists per user** — organise by occasion, season, etc.
-- **Wishes** with optional description, approximate price, purchase links, optional image URL/upload, and arbitrary text tags (`#tech`, `#books`, …).
-- **Wish claiming** — logged-in users can claim/unclaim a wish to avoid duplicate gifts. The list owner never sees claim status (surprise preserved!).
-- **Public sharing** — every list has a secret share URL; anyone with the link can browse it without an account.
-- **Dark mode** (Halcyon colour scheme), mobile-first, minimal UI.
+- **Passwordless authentication**: sign up to receive a 16-digit account number; that's the login and password. No personal info to leak.
+- **Multiple wishlists per user**: organise by occasion, season, etc.
+- **Wishes** with (optional) description, price, links, optional image, and arbitrary tags such as `#tech`, `#books`, ...
+- **List sharing** every list has a secret share URL; anyone with the link can browse it without an account. This is intended to allow sharing lists publically, while the application runs on private infrastructure.
+- **Wish claiming**: logged-in users can claim/unclaim a wish to avoid duplicate gifts. The list owner never sees claim status (surprise preserved!).
 
-## Work in Progress
+## Quickstart
 
-- **Public sharing** — every list has a secret share URL (like Google Drive). Anyone with the link can browse it without an account.
+<!-- TODO: this should explain how to run the project when a tagged docker container has been published for it -->
 
-## Tech Stack
+The intent is to selfhost. Use `docker compose` after editing the environment files. 
+
+1. Copy and edit environment variables, e.g. `cp backend/.env.example backend/.env` and `cp frontend/.env.example frontend/.env`, then edit them with your values.
+2. Build and start the services with `docker compose up --build`; if things look good, press `d` to detach.
+3. Open the app in your browser at `http://localhost:3000` (or the port you set in `frontend/.env`).
+
+You should now be good to go.
+
+## Development
+
+This project uses following tech:
 
 | Layer          | Technology                               |
 | -------------- | ---------------------------------------- |
-| Backend        | Java 25, Spring Boot 3, JPA              |
-| Database       | PostgreSQL 16                            |
+| Backend        | Java 25, Spring Boot 4, JPA              |
+| Database       | PostgreSQL 18                            |
 | Migrations     | Flyway                                   |
 | Object Storage | MinIO (S3-compatible)                    |
 | Frontend       | SvelteKit 2 (Svelte 5), TypeScript, Bun  |
+| Testing        | Vitest (unit) + Playwright (e2e)         | 
 | Packaging      | Docker + Docker Compose                  |
 
-## Quick Start
-
-The intent is to selfhost. I suggest you use `docker compose` after editing the environment files.
-
-1. Copy and edit service environment variables, e.g. `cp backend/.env.example backend/.env` and `cp frontend/.env.example frontend/.env`, then edit them with your values.
-2. Build and start the services with `docker compose up --build -d`; note that `-d` is for detached mode, so logs won't show in the terminal.
-3. Open the app in your browser at `http://localhost:3000` (or the port you set in `frontend/.env`).
-
-### Default ports
-
-| Service       | Host port   |
-| ------------- | ----------- |
-| Frontend      | 3000        |
-| Backend       | 8080        |
-| Database      | 5432        |
-| MinIO API     | 9000        |
-| MinIO Console | 9001        |
-
-### MinIO
-
-The stack includes MinIO for wish image uploads.
-
-- API endpoint: `http://localhost:9000`
-- Console: `http://localhost:9001`
-- Default local credentials (from `backend/.env`): `minioadmin` / `minioadmin`
-
-## Reverse Proxy Deployment
-
-> [CAUTION]
-> Not yet tested for accuracy! Use with caution and verify all settings.
-
-### Subdomain (`omiyage.example.com`)
-
-Point your reverse proxy at the frontend container on port `3000` and a separate subdomain/path for the API on port `8080`. Set:
-
-```env
-PUBLIC_API_URL=https://api.omiyage.example.com
-PUBLIC_API_PORT=
-PUBLIC_BASE_PATH=
-CORS_ALLOWED_ORIGINS=https://omiyage.example.com
-```
-
-### Subpath (`example.com/omiyage`)
-
-```env
-PUBLIC_API_URL=https://example.com
-PUBLIC_API_PORT=
-PUBLIC_API_PATH=/omiyage/api
-PUBLIC_BASE_PATH=/omiyage
-SERVER_SERVLET_CONTEXT_PATH=/omiyage/api
-CORS_ALLOWED_ORIGINS=https://example.com
-```
-
-Then configure your reverse proxy (nginx/Caddy/Traefik) to forward:
-
-- `example.com/omiyage/*` → frontend container
-- `example.com/omiyage/api/*` → backend container
-
-#### Nginx example
-
-```nginx
-location /omiyage/ {
-    proxy_pass http://frontend:3000/;
-    proxy_set_header Host $host;
-}
-
-location /omiyage/api/ {
-    proxy_pass http://backend:8080/omiyage/api/;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
-```
+To run the project, use `docker compose up --build` from the root dir after cloning.
+This will spin up the database, backend, and frontend, and connect them together
+using the values in the environment files. If you haven't set up the `.env` files in the frontend and backend directories, you probably want to do so.
 
 ## Environment Variables
 
@@ -124,7 +64,8 @@ location /omiyage/api/ {
 | `MINIO_SECRET_KEY`                 | `minioadmin`            | MinIO secret key                                                  |
 | `MINIO_BUCKET`                     | `omiyage-images`        | Bucket name for wish images                                       |
 
-The backend can also read optional `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD` overrides. If they are unset, Spring derives them from `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`.
+The backend can also read optional `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD` overrides.
+If they are unset, Spring derives them from `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`.
 
 ### Frontend (`frontend/.env`)
 
@@ -135,36 +76,6 @@ The backend can also read optional `DATABASE_URL`, `DATABASE_USERNAME`, and `DAT
 | `PUBLIC_API_PATH`  | `/api`             | API base path                              |
 | `PUBLIC_BASE_PATH` | *(empty)*          | Frontend base path for subpath deployments |
 | `PORT`             | `3000`             | Frontend container port                    |
-
-The Compose file now reads `backend/.env` for the database, backend, and MinIO services, and `frontend/.env` for the frontend service. It no longer uses a root `.env` file.
-
-## Development (without Docker)
-
-> [CAUTION]
-> Not yet tested for accuracy! Use with caution and verify all settings. You may look at manually written `run.sh` in the backend folder for reference.
-
-### Backend
-
-```bash
-cd backend
-# Requires Java 25, Maven 3.9+, and a running PostgreSQL instance
-export DATABASE_URL=jdbc:postgresql://localhost:5432/omiyage
-export DATABASE_USERNAME=omiyage
-export DATABASE_PASSWORD=omiyage
-export SERVER_PORT=8080
-mvn spring-boot:run
-```
-
-### Frontend
-
-```bash
-cd frontend
-bun install
-# Point at the running backend
-PUBLIC_API_URL=http://localhost PUBLIC_API_PORT=8080 PUBLIC_API_PATH=/api bun run dev
-```
-
-The frontend now runs `svelte-kit sync` automatically during `bun install` and before the standard `dev`, `build`, and `preview` commands so the generated `.svelte-kit/tsconfig.json` exists before TypeScript tooling reads it.
 
 ## API Overview
 
@@ -199,4 +110,5 @@ All endpoints are prefixed with `/api`.
 - The account number is the login credential — treat it like a password. Share it with no one.
 - In production, set `CORS_ALLOWED_ORIGINS` to the exact frontend origin instead of `*`.
 - Use HTTPS in production (reverse proxy with TLS termination).
-- Set a strong `POSTGRES_PASSWORD`.
+- Set strong `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD`, `MINIO_ACCESS_KEY`, and `MINIO_SECRET_KEY`.
+
