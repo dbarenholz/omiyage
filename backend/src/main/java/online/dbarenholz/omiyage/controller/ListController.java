@@ -72,7 +72,10 @@ public class ListController {
     @GetMapping("/shared/{shareId}")
     public ResponseEntity<WishListResponse> getSharedList(@PathVariable UUID shareId,
                                                           Authentication auth) {
-        User viewer = (auth != null && auth.isAuthenticated()) ? (User) auth.getPrincipal() : null;
+        User viewer = null;
+        if (auth != null && auth.getPrincipal() instanceof User user) {
+            viewer = user;
+        }
         return ResponseEntity.ok(wishListService.getSharedList(shareId, viewer));
     }
 }

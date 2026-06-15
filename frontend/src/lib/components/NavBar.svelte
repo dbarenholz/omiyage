@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { userStore } from '$lib/stores';
+	import { page } from '$app/state';
 	import { get } from 'svelte/store';
 	import { logout, updateMe } from '$lib/api';
 	import Modal from '$lib/components/Modal.svelte';
@@ -20,7 +21,10 @@
 	async function handleLogout() {
 		await logout();
 		userStore.set(null);
-		goto(resolve('/login'));
+		const currentPath = page.url.pathname;
+		if (!currentPath.startsWith(resolve('/shared/'))) {
+			goto(resolve('/login'));
+		}
 	}
 
 	function openDisplayNameModal() {
