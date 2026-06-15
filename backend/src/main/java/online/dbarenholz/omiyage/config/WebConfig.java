@@ -1,15 +1,16 @@
 package online.dbarenholz.omiyage.config;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import lombok.RequiredArgsConstructor;
+
 @Configuration
+@RequiredArgsConstructor
 public class WebConfig implements WebMvcConfigurer {
 
-    @Value("${cors.allowed-origins:*}")
-    private String allowedOrigins;
+    private final CorsProperties corsProperties;
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
@@ -19,11 +20,12 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowCredentials(true)
                 .maxAge(3600);
 
-        String[] origins = allowedOrigins.split(",");
+        String[] origins = corsProperties.allowedOrigins().split(",");
         boolean isWildcard = origins.length == 1 && "*".equals(origins[0].trim());
 
         if (isWildcard) {
-            // allowedOriginPatterns("*") supports credentials with any origin (reflects Origin header)
+            // allowedOriginPatterns("*") supports credentials with any origin (reflects
+            // Origin header)
             mapping.allowedOriginPatterns("*");
         } else {
             mapping.allowedOrigins(origins);

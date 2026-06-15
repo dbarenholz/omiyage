@@ -3,6 +3,7 @@ package online.dbarenholz.omiyage.config;
 import jakarta.servlet.http.HttpServletResponse;
 import online.dbarenholz.omiyage.filter.SessionAuthFilter;
 import online.dbarenholz.omiyage.repository.UserRepository;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -27,7 +28,7 @@ public class SecurityConfig {
     }
 
   @Bean
-  public SessionAuthFilter sessionAuthFilter(UserRepository userRepository) {
+  public SessionAuthFilter sessionAuthFilter(ObjectProvider<UserRepository> userRepository) {
     return new SessionAuthFilter(userRepository);
   }
 
@@ -57,6 +58,7 @@ public class SecurityConfig {
             .permitAll()
             .requestMatchers(HttpMethod.GET, "/api/auth/csrf").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/lists/shared/**").permitAll()
+            .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
             .anyRequest().authenticated())
         .exceptionHandling(ex -> ex
             .authenticationEntryPoint((req, res, e) -> res.sendError(

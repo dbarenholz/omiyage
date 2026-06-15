@@ -1,18 +1,22 @@
-# Build stage
-FROM eclipse-temurin:25-jdk AS build
+# build stage
+FROM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /app
-# Install Maven
-RUN apt-get update && apt-get install -y maven && rm -rf /var/lib/apt/lists/*
+# download dependencies first (layer cache)
 COPY pom.xml .
-# Download dependencies first (layer cache)
-RUN mvn dependency:go-offline -q
+RUN mvn dependency:go-offline -B
 COPY src ./src
-RUN mvn package -DskipTests -q
+RUN mvn package -DskipTests -B
 
-# Runtime stage
+# runtime stage, no need for maven
 FROM eclipse-temurin:25-jre
+RUN groupadd -r omiyage && useradd -r -g omiyage omiyage
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
+# copy jar and set ownership
+COPY --from=build --chown=omiyage:omiyage /app/target/*.jar app.jar
+# switch to non-root user
+USER omiyage
+
 ENV SERVER_PORT=8080
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+
+CMD ["java", "-jar", "app.jar"]

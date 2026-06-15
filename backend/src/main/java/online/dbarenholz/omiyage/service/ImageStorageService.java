@@ -6,7 +6,6 @@ import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.SetBucketPolicyArgs;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -20,20 +19,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ImageStorageService {
 
-    @Value("${storage.minio.endpoint}")
-    private String endpoint;
-
-    @Value("${storage.minio.access-key}")
-    private String accessKey;
-
-    @Value("${storage.minio.secret-key}")
-    private String secretKey;
-
-    @Value("${storage.minio.bucket}")
-    private String bucket;
-
-    @Value("${storage.minio.public-url}")
-    private String publicUrl;
+    private final online.dbarenholz.omiyage.config.MinioProperties minioProperties;
 
     private volatile boolean bucketEnsured = false;
 
@@ -55,12 +41,11 @@ public class ImageStorageService {
             try (InputStream input = file.getInputStream()) {
                 minioClient().putObject(
                         PutObjectArgs.builder()
-                                .bucket(bucket)
+                                .bucket(minioProperties.bucket())
                                 .object(objectName)
                                 .stream(input, file.getSize(), -1)
                                 .contentType(contentType)
-                                .build()
-                );
+                                .build());
             }
         } catch (ResponseStatusException e) {
             throw e;
@@ -69,41 +54,40 @@ public class ImageStorageService {
                     "Failed to store image", e);
         }
 
-        return normalizedPublicBaseUrl() + "/" + bucket + "/" + objectName;
+        return normalizedPublicBaseUrl() + "/" + minioProperties.bucket() + "/" + objectName;
     }
 
     private void ensureBucket() {
-        if (bucketEnsured) return;
+        if (bucketEnsured)
+            return;
         synchronized (this) {
-            if (bucketEnsured) return;
+            if (bucketEnsured)
+                return;
             try {
                 boolean exists = minioClient().bucketExists(
-                        BucketExistsArgs.builder().bucket(bucket).build()
-                );
+                        BucketExistsArgs.builder().bucket(minioProperties.bucket()).build());
                 if (!exists) {
                     minioClient().makeBucket(
-                            MakeBucketArgs.builder().bucket(bucket).build()
-                    );
+                            MakeBucketArgs.builder().bucket(minioProperties.bucket()).build());
                 }
 
-                                // Public read access for uploaded wish images.
-                                String policy = """
-                                                {
-                                                    "Version": "2012-10-17",
-                                                    "Statement": [
-                                                        {
-                                                            "Effect": "Allow",
-                                                            "Principal": {"AWS": ["*"]},
-                                                            "Action": ["s3:GetObject"],
-                                                            "Resource": ["arn:aws:s3:::%s/*"]
-                                                        }
-                                                    ]
-                                                }
-                                                """.formatted(bucket);
+                // Public read access for uploaded wish images.
+                String policy = """
+                        {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Principal": {"AWS": ["*"]},
+                                    "Action": ["s3:GetObject"],
+                                    "Resource": ["arn:aws:s3:::%s/*"]
+                                }
+                            ]
+                        }
+                        """.formatted(minioProperties.bucket());
 
-                                minioClient().setBucketPolicy(
-                                                SetBucketPolicyArgs.builder().bucket(bucket).config(policy).build()
-                                );
+                minioClient().setBucketPolicy(
+                        SetBucketPolicyArgs.builder().bucket(minioProperties.bucket()).config(policy).build());
                 bucketEnsured = true;
             } catch (Exception e) {
                 throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
@@ -114,8 +98,8 @@ public class ImageStorageService {
 
     private MinioClient minioClient() {
         return MinioClient.builder()
-                .endpoint(endpoint)
-                .credentials(accessKey, secretKey)
+                .endpoint(minioProperties.endpoint())
+                .credentials(minioProperties.accessKey(), minioProperties.secretKey())
                 .build();
     }
 
@@ -131,6 +115,7 @@ public class ImageStorageService {
     }
 
     private String normalizedPublicBaseUrl() {
+        String publicUrl = minioProperties.publicUrl();
         return publicUrl.endsWith("/") ? publicUrl.substring(0, publicUrl.length() - 1) : publicUrl;
     }
 }

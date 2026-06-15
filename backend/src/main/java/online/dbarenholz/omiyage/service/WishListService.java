@@ -10,7 +10,7 @@ import online.dbarenholz.omiyage.entity.User;
 import online.dbarenholz.omiyage.entity.WishList;
 import online.dbarenholz.omiyage.repository.WishListRepository;
 import org.springframework.http.HttpStatus;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;

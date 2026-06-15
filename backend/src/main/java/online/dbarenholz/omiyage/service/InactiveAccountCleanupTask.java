@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,13 +36,12 @@ import online.dbarenholz.omiyage.repository.UserRepository;
 public class InactiveAccountCleanupTask {
 
     private final UserRepository userRepository;
-
-    @Value("${app.cleanup.inactive-account-minutes:15}")
-    private int inactiveAccountMinutes;
+    private final online.dbarenholz.omiyage.config.AppCleanupProperties appCleanupProperties;
 
     @Scheduled(cron = "0 */15 * * * *")
     @Transactional
     public void deleteInactiveAccounts() {
+        int inactiveAccountMinutes = appCleanupProperties.inactiveAccountMinutes();
         Instant cutoff = Instant.now().minus(inactiveAccountMinutes, ChronoUnit.MINUTES);
         List<User> stale = userRepository.findByLastLoginAtIsNullAndCreatedAtBefore(cutoff);
         if (!stale.isEmpty()) {

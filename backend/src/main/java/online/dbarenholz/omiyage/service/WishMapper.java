@@ -7,7 +7,7 @@ import online.dbarenholz.omiyage.entity.User;
 import online.dbarenholz.omiyage.entity.Wish;
 import online.dbarenholz.omiyage.entity.WishClaim;
 import online.dbarenholz.omiyage.entity.WishTag;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

@@ -19,7 +19,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
+
+import jakarta.validation.Valid;
 
 import java.util.Map;
 
@@ -62,11 +63,8 @@ public class AuthController {
     }
 
     @PatchMapping("/users/me")
-    public ResponseEntity<UserResponse> updateMe(@RequestBody UpdateDisplayNameRequest request,
+    public ResponseEntity<UserResponse> updateMe(@Valid @RequestBody UpdateDisplayNameRequest request,
                                                  Authentication auth) {
-        if (request.displayName() == null || request.displayName().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Display name is required");
-        }
 
         User user = (User) auth.getPrincipal();
         user.setDisplayName(request.displayName().trim());

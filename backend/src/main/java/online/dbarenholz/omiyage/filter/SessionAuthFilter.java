@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import online.dbarenholz.omiyage.repository.UserRepository;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -21,10 +22,10 @@ import java.util.UUID;
  */
 public class SessionAuthFilter extends OncePerRequestFilter {
 
-    private final UserRepository userRepository;
+    private final ObjectProvider<UserRepository> userRepositoryProvider;
 
-    public SessionAuthFilter(UserRepository userRepository) {
-        this.userRepository = userRepository;
+    public SessionAuthFilter(ObjectProvider<UserRepository> userRepositoryProvider) {
+        this.userRepositoryProvider = userRepositoryProvider;
     }
 
     @Override
@@ -35,7 +36,7 @@ public class SessionAuthFilter extends OncePerRequestFilter {
         if (session != null) {
             Object raw = session.getAttribute("USER_ID");
             if (raw instanceof UUID userId) {
-                userRepository.findById(userId).ifPresent(user -> {
+                userRepositoryProvider.getObject().findById(userId).ifPresent(user -> {
                     var auth = new UsernamePasswordAuthenticationToken(
                             user, null, Collections.emptyList());
                     SecurityContextHolder.getContext().setAuthentication(auth);
