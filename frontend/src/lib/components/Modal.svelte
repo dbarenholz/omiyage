@@ -1,31 +1,123 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
+	import { tick } from "svelte";
+	import type { Snippet } from "svelte";
 
-	export let title = '';
-	export let open = false;
+	let {
+		title = "",
+		open = false,
+		onclose,
+		children,
+	}: {
+		title?: string;
+		open?: boolean;
+		onclose?: () => void;
+		children?: Snippet;
+	} = $props();
 
-	const dispatch = createEventDispatcher();
+	let modalEl: HTMLDivElement | null = $state(null);
+	let previousFocus: HTMLElement | null = null;
 
 	function close() {
-		dispatch('close');
+		onclose?.();
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') close();
+		if (!open || !modalEl) return;
+		if (e.key === "Escape") {
+			close();
+			e.preventDefault();
+			return;
+		}
+		if (e.key === "Tab") {
+			const focusableElements = Array.from(
+				modalEl.querySelectorAll<HTMLElement>(
+					'button, [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+				),
+			);
+			if (focusableElements.length === 0) {
+				e.preventDefault();
+				return;
+			}
+			// we know focusableElements != undefined, and that length > 0
+			// since we use querySelectorAll, elements _must_ be of type HTMLElement, and therefor cannot be undefined
+			// we can safely use `?` in the subsequent `.focus()` calls
+			const firstElement = focusableElements[0];
+			const lastElement = focusableElements[focusableElements.length - 1];
+
+			if (e.shiftKey) {
+				if (
+					document.activeElement === firstElement ||
+					document.activeElement === modalEl
+				) {
+					lastElement?.focus();
+					e.preventDefault();
+				}
+			} else {
+				if (
+					document.activeElement === lastElement ||
+					document.activeElement === modalEl
+				) {
+					firstElement?.focus();
+					e.preventDefault();
+				}
+			}
+		}
 	}
+
+	$effect(() => {
+		if (open) {
+			if (typeof document !== "undefined" && !previousFocus) {
+				previousFocus = document.activeElement as HTMLElement;
+			}
+			tick().then(() => {
+				if (modalEl) {
+					const firstInput = modalEl.querySelector<HTMLElement>(
+						'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled])',
+					);
+					if (firstInput) {
+						firstInput.focus();
+					} else {
+						const firstFocusable =
+							modalEl.querySelector<HTMLElement>(
+								'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+							);
+						if (firstFocusable) firstFocusable.focus();
+					}
+				}
+			});
+		} else {
+			if (previousFocus && typeof document !== "undefined") {
+				previousFocus.focus();
+				previousFocus = null;
+			}
+		}
+	});
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 {#if open}
-	<div class="overlay" on:click={close} role="presentation">
-		<div class="modal" on:click|stopPropagation role="dialog" aria-modal="true" aria-labelledby="modal-title">
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+	<div class="overlay" onclick={close} role="presentation">
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+		<div
+			class="modal"
+			bind:this={modalEl}
+			tabindex="-1"
+			onclick={(e) => e.stopPropagation()}
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="modal-title"
+		>
 			<div class="modal-header">
 				<h2 id="modal-title">{title}</h2>
-				<button class="close-btn" on:click={close} aria-label="Close">✕</button>
+				<button class="close-btn" onclick={close} aria-label="Close"
+					>✕</button
+				>
 			</div>
 			<div class="modal-body">
-				<slot />
+				{@render children?.()}
 			</div>
 		</div>
 	</div>

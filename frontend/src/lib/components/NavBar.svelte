@@ -4,22 +4,23 @@
 	import { get } from 'svelte/store';
 	import { logout, updateMe } from '$lib/api';
 	import Modal from '$lib/components/Modal.svelte';
-	import { base } from '$app/paths';
+	import { resolve } from '$app/paths';
 	import {Pencil} from "lucide-svelte";
 
-	let showDisplayNameModal = false;
-	let displayNameInput = '';
-	let displayNameTouched = false;
-	let savingDisplayName = false;
-	let displayNameError = '';
+	let showDisplayNameModal = $state(false);
+	let displayNameInput = $state('');
+	let displayNameTouched = $state(false);
+	let savingDisplayName = $state(false);
+	let displayNameError = $state('');
 
-	$: displayNameValidationError =
-		displayNameTouched && !displayNameInput.trim() ? 'Display name is required' : '';
+	let displayNameValidationError = $derived(
+		displayNameTouched && !displayNameInput.trim() ? 'Display name is required' : ''
+	);
 
 	async function handleLogout() {
 		await logout();
 		userStore.set(null);
-		goto(`${base}/login`);
+		goto(resolve('/login'));
 	}
 
 	function openDisplayNameModal() {
@@ -59,28 +60,28 @@
 
 <nav class="navbar">
 	<div class="navbar-inner container">
-		<a href="{base}/dashboard" class="brand">🎁 Omiyage</a>
+		<a href={resolve('/dashboard')} class="brand">🎁 Omiyage</a>
 		<div class="nav-right">
 			{#if $userStore}
-				<button class="display-name-btn" on:click={openDisplayNameModal} title="Edit display name">
+				<button class="display-name-btn" onclick={openDisplayNameModal} title="Edit display name">
 					<Pencil size={16} />
 					<span class="display-name-text">{$userStore.displayName || 'Unnamed user'}</span>
 				</button>
-				<button class="btn-ghost logout-btn" on:click={handleLogout}>Logout</button>
+				<button class="btn-ghost logout-btn" onclick={handleLogout}>Logout</button>
 			{/if}
 		</div>
 	</div>
 </nav>
 
-<Modal title="Update Display Name" open={showDisplayNameModal} on:close={closeDisplayNameModal}>
-	<form on:submit|preventDefault={handleDisplayNameSave}>
+<Modal title="Update Display Name" open={showDisplayNameModal} onclose={closeDisplayNameModal}>
+	<form onsubmit={(e) => { e.preventDefault(); handleDisplayNameSave(); }}>
 		<div class="form-group">
 			<label for="display-name">Display Name *</label>
 			<input
 				id="display-name"
 				bind:value={displayNameInput}
-				on:input={() => (displayNameTouched = true)}
-				on:blur={() => (displayNameTouched = true)}
+				oninput={() => (displayNameTouched = true)}
+				onblur={() => (displayNameTouched = true)}
 				class:field-invalid={!!displayNameValidationError}
 				class:field-valid={displayNameTouched && !displayNameValidationError}
 				placeholder="How your name appears"
@@ -91,7 +92,7 @@
 			<p class="error-msg">{displayNameError}</p>
 		{/if}
 		<div class="modal-actions">
-			<button type="button" class="btn-ghost" on:click={closeDisplayNameModal}>Cancel</button>
+			<button type="button" class="btn-ghost" onclick={closeDisplayNameModal}>Cancel</button>
 			<button type="submit" class="btn-primary" disabled={savingDisplayName}>
 				{savingDisplayName ? 'Saving…' : 'Save'}
 			</button>
@@ -145,21 +146,11 @@
 			white-space: nowrap;
 		}
 
-		.display-name-edit-icon {
-			font-size: 0.78rem;
-			opacity: 0.75;
-			line-height: 1;
-		}
-
 		&:hover {
 			color: var(--text-bright);
 			background: var(--surface-2);
 			border-color: var(--border);
 			opacity: 1;
-
-			.display-name-edit-icon {
-				opacity: 1;
-			}
 		}
 	}
 

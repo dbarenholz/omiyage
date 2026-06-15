@@ -1,23 +1,29 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
 	import { Pencil, X } from 'lucide-svelte';
 	import type { Wish } from '$lib/types';
 
-	export let wish: Wish;
-	export let isOwner = false;
-	export let canClaim = false;
-
-	const dispatch = createEventDispatcher<{
-		edit: Wish;
-		delete: string;
-		claim: string;
-		unclaim: string;
-	}>();
+	let {
+		wish,
+		isOwner = false,
+		canClaim = false,
+		onedit,
+		ondelete,
+		onclaim,
+		onunclaim
+	}: {
+		wish: Wish;
+		isOwner?: boolean;
+		canClaim?: boolean;
+		onedit?: (wish: Wish) => void;
+		ondelete?: (id: string) => void;
+		onclaim?: (id: string) => void;
+		onunclaim?: (id: string) => void;
+	} = $props();
 
 	const tagColors = ['tag-yellow', 'tag-cyan', 'tag-purple', 'tag-green'];
 
 	function tagColor(index: number): string {
-		return tagColors[index % tagColors.length];
+		return tagColors[index % tagColors.length] ?? '#3b82f6';
 	}
 
 	function formatPrice(price: number, currencyCode?: string): string {
@@ -39,13 +45,13 @@
 		<div class="wish-title-row">
 			<h3 class="wish-title">{wish.title}</h3>
 			{#if wish.approximatePrice != null}
-				<span class="price">{formatPrice(wish.approximatePrice, wish.currencyCode)}</span>
+				<span class="price">{formatPrice(wish.approximatePrice, wish.currencyCode ?? undefined)}</span>
 			{/if}
 		</div>
 		{#if isOwner}
 			<div class="owner-actions">
-				<button class="btn-ghost action-btn" on:click={() => dispatch('edit', wish)} title="Edit"><Pencil class="icon" size={18} /></button>
-				<button class="btn-ghost action-btn danger" on:click={() => dispatch('delete', wish.id)} title="Delete"><X class="icon danger" size={18} /></button>
+				<button class="btn-ghost action-btn" onclick={() => onedit?.(wish)} title="Edit"><Pencil class="icon" size={18} /></button>
+				<button class="btn-ghost action-btn danger" onclick={() => ondelete?.(wish.id)} title="Delete"><X class="icon danger" size={18} /></button>
 			</div>
 		{/if}
 	</div>
@@ -83,9 +89,9 @@
 			{#if wish.claimed && !wish.claimedByMe}
 				<span class="claimed-badge">✓ Claimed</span>
 			{:else if wish.claimedByMe}
-				<button class="btn-ghost unclaim-btn" on:click={() => dispatch('unclaim', wish.id)}>Unclaim</button>
+				<button class="btn-ghost unclaim-btn" onclick={() => onunclaim?.(wish.id)}>Unclaim</button>
 			{:else}
-				<button class="btn-primary claim-btn" on:click={() => dispatch('claim', wish.id)}>Claim 🎁</button>
+				<button class="btn-primary claim-btn" onclick={() => onclaim?.(wish.id)}>Claim 🎁</button>
 			{/if}
 		</div>
 	{/if}

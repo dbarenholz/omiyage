@@ -4,30 +4,54 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "postinstall": "svelte-kit sync",
     "dev": "svelte-kit sync && vite dev",
     "build": "svelte-kit sync && vite build",
     "start": "bun ./build/index.js",
     "preview": "svelte-kit sync && vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "test:unit": "NODE_OPTIONS=--no-experimental-webstorage vitest",
+    "test:unit:watch": "NODE_OPTIONS=--no-experimental-webstorage vitest --watch",
+    "test:e2e": "docker compose -f ../backend/docker-compose.yml up -d && bunx playwright test; EXIT_CODE=$?; docker compose -f ../backend/docker-compose.yml down; exit $EXIT_CODE",
+    "test:e2e:ui": "docker compose -f ../backend/docker-compose.yml up -d && bunx playwright test --ui; EXIT_CODE=$?; docker compose -f ../backend/docker-compose.yml down; exit $EXIT_CODE",
+    "test:e2e:debug": "docker compose -f ../backend/docker-compose.yml up -d && bunx playwright test --debug; EXIT_CODE=$?; docker compose -f ../backend/docker-compose.yml down; exit $EXIT_CODE",
+    "test:e2e:report": "bunx playwright show-report",
+    "generate:api": "openapi-typescript ../backend/target/openapi.json -o src/lib/types-dto.ts"
   },
   "engines": {
     "bun": ">=1.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@sveltejs/adapter-node": "^5.2.12",
     "@sveltejs/kit": "^2.21.1",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
-    "@types/node": "^25.5.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/svelte": "^5.3.1",
+    "@types/bun": "latest",
+    "@types/node": "^25.9.3",
+    "jsdom": "^29.1.1",
+    "msw": "^2.14.6",
+    "openapi-typescript": "^7.13.0",
     "sass": "^1.99.0",
     "svelte": "^5.33.3",
     "svelte-check": "^4.2.1",
     "typescript": "^5.8.3",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vitest": "^4.1.8"
   },
   "dependencies": {
     "currency-codes": "^2.2.0",
     "lucide-svelte": "^1.0.1"
-  }
+  },
+  "trustedDependencies": [
+    "@parcel/watcher",
+    "esbuild"
+  ],
+  "msw": {
+    "workerDirectory": [
+      "static"
+    ]
+  },
+  "module": "index.ts"
 }

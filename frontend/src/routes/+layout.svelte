@@ -5,6 +5,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 
+	let { children } = $props();
+
 	const publicRoutes = ['/login', '/signup'];
 
 	onMount(async () => {
@@ -13,10 +15,10 @@
 		}
 	});
 
-	$: showNav = !publicRoutes.some((r) => $page.url.pathname.endsWith(r));
+	let showNav = $derived(!publicRoutes.some((r) => $page.url.pathname.endsWith(r)));
 </script>
 
 {#if showNav && $userStore}
 	<NavBar />
 {/if}
-<slot />
+{@render children?.()}

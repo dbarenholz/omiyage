@@ -6,39 +6,47 @@
 	import { userStore } from '$lib/stores';
 	import ListCard from '$lib/components/ListCard.svelte';
 	import Modal from '$lib/components/Modal.svelte';
-	import type { WishList } from '$lib/types';
-	import { base } from '$app/paths';
+	import type { WishList, WishListSummary } from '$lib/types';
+	import { resolve } from '$app/paths';
+	import { browser } from '$app/environment';
 
 	type ListSortMode = 'alphabetical' | 'wish-count' | 'created-date' | 'modified-date';
 
-	let lists: WishList[] = [];
-	let loading = true;
-	let error = '';
-	let showCreateModal = false;
-	let createTitle = '';
-	let createDesc = '';
-	let createLoading = false;
-	let createError = '';
-	let createTitleTouched = false;
-	let showEditModal = false;
-	let editingList: WishList | null = null;
-	let editTitle = '';
-	let editDesc = '';
-	let editLoading = false;
-	let editError = '';
-	let editTitleTouched = false;
-	let sortMode: ListSortMode = 'modified-date';
+	let lists: WishListSummary[] = $state([]);
+	let loading = $state(true);
+	let error = $state('');
+	let showCreateModal = $state(false);
+	let createTitle = $state('');
+	let createDesc = $state('');
+	let createLoading = $state(false);
+	let createError = $state('');
+	let createTitleTouched = $state(false);
+	let showEditModal = $state(false);
+	let editingList: WishListSummary | null = $state(null);
+	let editTitle = $state('');
+	let editDesc = $state('');
+	let editLoading = $state(false);
+	let editError = $state('');
+	let editTitleTouched = $state(false);
+	let sortMode: ListSortMode = $state((browser && localStorage.getItem('omiyage-sort-mode') as ListSortMode) || 'modified-date');
 
-	$: createTitleError = createTitleTouched && !createTitle.trim() ? 'Title is required' : '';
-	$: editTitleError = editTitleTouched && !editTitle.trim() ? 'Title is required' : '';
-	$: sortedLists = [...lists].sort((a, b) => compareLists(a, b, sortMode));
+	let createTitleError = $derived(createTitleTouched && !createTitle.trim() ? 'Title is required' : '');
+	let editTitleError = $derived(editTitleTouched && !editTitle.trim() ? 'Title is required' : '');
+	let sortedLists = $derived([...lists].sort((a, b) => compareLists(a, b, sortMode)));
 
 	onMount(async () => {
 		if (!$userStore) {
-			goto(`${base}/login`);
+			goto(resolve('/login'));
 			return;
 		}
+		
 		await fetchLists();
+	});
+
+	$effect(() => {
+		if (browser) {
+			localStorage.setItem('omiyage-sort-mode', sortMode);
+		}
 	});
 
 	async function fetchLists() {
@@ -63,7 +71,7 @@
 		createLoading = true;
 		try {
 			const newList = await createList(createTitle.trim(), createDesc.trim() || undefined);
-			lists = [newList, ...lists];
+			lists = [{ ...newList, wishCount: 0, updatedAt: newList.createdAt }, ...lists];
 			showCreateModal = false;
 			createTitle = '';
 			createDesc = '';
@@ -75,7 +83,7 @@
 		}
 	}
 
-	function openEditModal(list: WishList) {
+	function openEditModal(list: WishListSummary) {
 		editingList = list;
 		editTitle = list.title;
 		editDesc = list.description || '';
@@ -109,7 +117,7 @@
 				title: editTitle.trim(),
 				description: editDesc.trim() || undefined
 			});
-			lists = lists.map((list) => (list.id === updated.id ? { ...list, ...updated } : list));
+			lists = lists.map((list) => (list.id === updated.id ? { ...list, title: updated.title, description: updated.description } : list));
 			closeEditModal();
 		} catch (e: unknown) {
 			editError = e instanceof Error ? e.message : 'Failed to update list';
@@ -128,7 +136,7 @@
 		}
 	}
 
-	function compareLists(a: WishList, b: WishList, mode: ListSortMode): number {
+	function compareLists(a: WishListSummary, b: WishListSummary, mode: ListSortMode): number {
 		if (mode === 'alphabetical') {
 			const byTitle = a.title.localeCompare(b.title, 'en', { sensitivity: 'base' });
 			return byTitle !== 0 ? byTitle : compareByNewestDate(a, b);
@@ -140,21 +148,17 @@
 		}
 
 		if (mode === 'created-date') {
-			const byCreatedAt = toTimestamp(b.createdAt) - toTimestamp(a.createdAt);
+			const byCreatedAt = a.createdAt.getTime() - b.createdAt.getTime();
 			return byCreatedAt !== 0 ? byCreatedAt : a.title.localeCompare(b.title, 'en');
 		}
 
 		return compareByNewestDate(a, b);
 	}
 
-	function compareByNewestDate(a: WishList, b: WishList): number {
+	function compareByNewestDate(a: WishListSummary, b: WishListSummary): number {
 		const byModifiedAt =
-			toTimestamp(b.updatedAt || b.createdAt) - toTimestamp(a.updatedAt || a.createdAt);
+			(b.updatedAt || b.createdAt).getTime() - (a.updatedAt || a.createdAt).getTime();
 		return byModifiedAt !== 0 ? byModifiedAt : a.title.localeCompare(b.title, 'en');
-	}
-
-	function toTimestamp(value: string): number {
-		return Number.isNaN(Date.parse(value)) ? 0 : Date.parse(value);
 	}
 </script>
 
@@ -173,7 +177,7 @@
 					<option value="alphabetical">Alphabetical</option>
 				</select>
 			</div>
-			<button class="btn-primary" on:click={() => (showCreateModal = true)}>+ New List</button>
+			<button class="btn-primary" onclick={() => (showCreateModal = true)}>+ New List</button>
 		</div>
 	</div>
 
@@ -185,7 +189,7 @@
 		<div class="empty-state">
 			<h3>No wishlists yet</h3>
 			<p>Create your first list to get started!</p>
-			<button class="btn-primary" style="margin-top:1rem" on:click={() => (showCreateModal = true)}>
+			<button class="btn-primary" style="margin-top:1rem" onclick={() => (showCreateModal = true)}>
 				+ New List
 			</button>
 		</div>
@@ -193,34 +197,26 @@
 		<div class="list-grid">
 			{#each sortedLists as list (list.id)}
 				<div class="list-item">
-					<ListCard {list} />
-					<div class="list-actions">
-						<button
-							class="btn-ghost list-action-btn"
-							on:click={() => openEditModal(list)}
-							title="Edit list"
-					><Pencil class="icon" size={18} /></button>
-					<button
-						class="btn-ghost list-action-btn"
-						on:click={() => handleDelete(list.id)}
-						title="Delete list"
-					><X class="icon danger" size={18} /></button>
-					</div>
+					<ListCard 
+						{list} 
+						onedit={(l) => openEditModal(l)}
+						ondelete={(id) => handleDelete(id)}
+					/>
 				</div>
 			{/each}
 		</div>
 	{/if}
 </main>
 
-<Modal title="New Omiyage" open={showCreateModal} on:close={() => (showCreateModal = false)}>
-	<form on:submit|preventDefault={handleCreate}>
+<Modal title="New Omiyage" open={showCreateModal} onclose={() => (showCreateModal = false)}>
+	<form onsubmit={(e) => { e.preventDefault(); handleCreate(); }}>
 		<div class="form-group">
 			<label for="list-title">Title *</label>
 			<input
 				id="list-title"
 				bind:value={createTitle}
-				on:input={() => (createTitleTouched = true)}
-				on:blur={() => (createTitleTouched = true)}
+				oninput={() => (createTitleTouched = true)}
+				onblur={() => (createTitleTouched = true)}
 				class:field-invalid={!!createTitleError}
 				class:field-valid={createTitleTouched && !createTitleError}
 				placeholder="e.g. Birthday 2025"
@@ -238,7 +234,7 @@
 			<button
 				type="button"
 				class="btn-ghost"
-				on:click={() => {
+				onclick={() => {
 					showCreateModal = false;
 					createTitleTouched = false;
 					createError = '';
@@ -251,15 +247,15 @@
 	</form>
 </Modal>
 
-<Modal title="Edit Omiyage" open={showEditModal} on:close={closeEditModal}>
-	<form on:submit|preventDefault={handleUpdate}>
+<Modal title="Edit Omiyage" open={showEditModal} onclose={closeEditModal}>
+	<form onsubmit={(e) => { e.preventDefault(); handleUpdate(); }}>
 		<div class="form-group">
 			<label for="edit-list-title">Title *</label>
 			<input
 				id="edit-list-title"
 				bind:value={editTitle}
-				on:input={() => (editTitleTouched = true)}
-				on:blur={() => (editTitleTouched = true)}
+				oninput={() => (editTitleTouched = true)}
+				onblur={() => (editTitleTouched = true)}
 				class:field-invalid={!!editTitleError}
 				class:field-valid={editTitleTouched && !editTitleError}
 				placeholder="e.g. Birthday 2025"
@@ -274,7 +270,7 @@
 			<p class="error-msg">{editError}</p>
 		{/if}
 		<div class="modal-actions">
-			<button type="button" class="btn-ghost" on:click={closeEditModal}>Cancel</button>
+			<button type="button" class="btn-ghost" onclick={closeEditModal}>Cancel</button>
 			<button type="submit" class="btn-primary" disabled={editLoading}>
 				{editLoading ? 'Saving…' : 'Save'}
 			</button>
@@ -336,34 +332,9 @@
 		gap: 0.5rem;
 	}
 
-	.list-item > :global(a) {
+	.list-item > :global(.list-card) {
 		flex: 1;
 		min-width: 0;
-	}
-
-	.list-actions {
-		display: flex;
-		gap: 0.35rem;
-		align-self: center;
-	}
-
-	.list-action-btn {
-		flex-shrink: 0;
-		align-self: center;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 2.25rem;
-		height: 2.25rem;
-		padding: 0;
-	}
-
-	.list-action-btn :global(.icon) {
-		stroke-width: 2;
-	}
-
-	.list-action-btn :global(.icon.danger) {
-		color: var(--error);
 	}
 
 	.modal-actions {
@@ -382,18 +353,11 @@
 
 		.list-item {
 			flex-direction: column;
+			height: 100%;
 		}
 
-		.list-item > :global(a) {
-			flex: unset;
-		}
-
-		.list-actions {
-			align-self: flex-end;
-		}
-
-		.list-action-btn {
-			align-self: flex-end;
+		.list-item > :global(.list-card) {
+			flex: 1;
 		}
 	}
 </style>

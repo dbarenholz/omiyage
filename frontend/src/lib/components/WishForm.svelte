@@ -1,58 +1,88 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
-	import { uploadWishImage } from '$lib/api';
-	import { currencyOptions } from '$lib/currencies';
-	import type { CreateWishData, WishLink } from '$lib/types';
+	import { uploadWishImage } from "$lib/api";
+	import { currencyOptions } from "$lib/currencies";
+	import type { CreateWishData, WishLink } from "$lib/types";
 
-	export let initial: Partial<CreateWishData> = {};
-	export let loading = false;
+	let {
+		initial = {},
+		loading = false,
+		onsubmit,
+		oncancel,
+	}: {
+		initial?: Partial<CreateWishData>;
+		loading?: boolean;
+		onsubmit?: (data: CreateWishData) => void;
+		oncancel?: () => void;
+	} = $props();
 
-	const dispatch = createEventDispatcher<{ submit: CreateWishData; cancel: void }>();
+	// svelte-ignore state_referenced_locally
+	let title = $state(initial.title || "");
+	// svelte-ignore state_referenced_locally
+	let description = $state(initial.description || "");
+	// svelte-ignore state_referenced_locally
+	let priceStr = $state(
+		initial.approximatePrice != null
+			? String(initial.approximatePrice)
+			: "",
+	);
+	// svelte-ignore state_referenced_locally
+	let currencyCode = $state((initial.currencyCode || "EUR").toUpperCase());
+	// svelte-ignore state_referenced_locally
+	let imageUrl = $state(initial.imageUrl || "");
+	// svelte-ignore state_referenced_locally
+	let tags: string[] = $state(initial.tags ? [...initial.tags] : []);
+	// svelte-ignore state_referenced_locally
+	let links: WishLink[] = $state(initial.links ? [...initial.links] : []);
+	let tagInput = $state("");
+	let newLinkUrl = $state("");
+	let newLinkLabel = $state("");
+	let titleTouched = $state(false);
+	let priceTouched = $state(false);
+	let imageUrlTouched = $state(false);
+	let linkUrlTouched = $state(false);
+	let linkAddError = $state("");
+	let uploadLoading = $state(false);
+	let uploadError = $state("");
+	let error = $state("");
 
-	let title = initial.title || '';
-	let description = initial.description || '';
-	let priceStr = initial.approximatePrice != null ? String(initial.approximatePrice) : '';
-	let currencyCode = (initial.currencyCode || 'EUR').toUpperCase();
-	let imageUrl = initial.imageUrl || '';
-	let tags: string[] = initial.tags ? [...initial.tags] : [];
-	let links: WishLink[] = initial.links ? [...initial.links] : [];
-	let tagInput = '';
-	let newLinkUrl = '';
-	let newLinkLabel = '';
-	let titleTouched = false;
-	let priceTouched = false;
-	let imageUrlTouched = false;
-	let linkUrlTouched = false;
-	let linkAddError = '';
-	let uploadLoading = false;
-	let uploadError = '';
-	let error = '';
-
-	$: normalizedTitle = title.trim();
-	$: parsedPrice = priceStr ? Number.parseFloat(priceStr) : undefined;
-	$: titleError = titleTouched && !normalizedTitle ? 'Title is required' : '';
-	$: priceError =
-		priceTouched && priceStr && (parsedPrice == null || Number.isNaN(parsedPrice) || parsedPrice < 0)
-			? 'Price must be a valid non-negative number'
-			: '';
-	$: imageUrlError =
+	let normalizedTitle = $derived(title.trim());
+	let parsedPrice = $derived(
+		priceStr ? Number.parseFloat(priceStr) : undefined,
+	);
+	let titleError = $derived(
+		titleTouched && !normalizedTitle ? "Title is required" : "",
+	);
+	let priceError = $derived(
+		priceTouched &&
+			priceStr &&
+			(parsedPrice == null ||
+				Number.isNaN(parsedPrice) ||
+				parsedPrice < 0)
+			? "Price must be a valid non-negative number"
+			: "",
+	);
+	let imageUrlError = $derived(
 		imageUrlTouched && imageUrl.trim() && !isValidUrl(imageUrl.trim())
-			? 'Enter a valid image URL'
-			: '';
-	$: normalizedLinkInput = normalizeUrlInput(newLinkUrl);
-	$: liveLinkError =
-		linkUrlTouched && newLinkUrl.trim() && !normalizedLinkInput ? 'Enter a valid link URL' : '';
+			? "Enter a valid image URL"
+			: "",
+	);
+	let normalizedLinkInput = $derived(normalizeUrlInput(newLinkUrl));
+	let liveLinkError = $derived(
+		linkUrlTouched && newLinkUrl.trim() && !normalizedLinkInput
+			? "Enter a valid link URL"
+			: "",
+	);
 
 	function addTag() {
-		const val = tagInput.trim().replace(/,+$/, '');
+		const val = tagInput.trim().replace(/,+$/, "");
 		if (val && !tags.includes(val)) {
 			tags = [...tags, val];
 		}
-		tagInput = '';
+		tagInput = "";
 	}
 
 	function handleTagKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter' || e.key === ',') {
+		if (e.key === "Enter" || e.key === ",") {
 			e.preventDefault();
 			addTag();
 		}
@@ -68,21 +98,24 @@
 
 	function addLink() {
 		linkUrlTouched = true;
-		linkAddError = '';
+		linkAddError = "";
 
 		if (!newLinkUrl.trim()) {
-			linkAddError = 'Link URL is required';
+			linkAddError = "Link URL is required";
 			return;
 		}
 
 		if (!normalizedLinkInput) {
-			linkAddError = 'Enter a valid link URL';
+			linkAddError = "Enter a valid link URL";
 			return;
 		}
 
-		links = [...links, { url: normalizedLinkInput, label: newLinkLabel.trim() || undefined }];
-		newLinkUrl = '';
-		newLinkLabel = '';
+		links = [
+			...links,
+			{ url: normalizedLinkInput, label: newLinkLabel.trim() || null },
+		];
+		newLinkUrl = "";
+		newLinkLabel = "";
 		linkUrlTouched = false;
 	}
 
@@ -91,31 +124,31 @@
 	}
 
 	function handleSubmit() {
-		error = '';
+		error = "";
 		titleTouched = true;
 		priceTouched = true;
 		imageUrlTouched = true;
 
 		if (titleError) {
-			error = 'Title is required';
+			error = "Title is required";
 			return;
 		}
 		if (priceError) {
-			error = 'Invalid price';
+			error = "Invalid price";
 			return;
 		}
 		if (imageUrlError) {
 			error = imageUrlError;
 			return;
 		}
-		dispatch('submit', {
+		onsubmit?.({
 			title: normalizedTitle,
 			description: description.trim() || undefined,
 			approximatePrice: parsedPrice,
 			currencyCode,
 			imageUrl: imageUrl.trim() || undefined,
 			tags,
-			links
+			links,
 		});
 	}
 
@@ -132,12 +165,14 @@
 		const trimmed = value.trim();
 		if (!trimmed) return null;
 
-		const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+		const withProtocol = /^https?:\/\//i.test(trimmed)
+			? trimmed
+			: `https://${trimmed}`;
 		return isValidUrl(withProtocol) ? withProtocol : null;
 	}
 
 	async function handleImageFileChange(event: Event) {
-		uploadError = '';
+		uploadError = "";
 		const target = event.currentTarget as HTMLInputElement;
 		const file = target.files?.[0];
 		if (!file) return;
@@ -146,22 +181,28 @@
 		try {
 			imageUrl = await uploadWishImage(file);
 		} catch (e: unknown) {
-			uploadError = e instanceof Error ? e.message : 'Image upload failed';
+			uploadError =
+				e instanceof Error ? e.message : "Image upload failed";
 		} finally {
 			uploadLoading = false;
-			target.value = '';
+			target.value = "";
 		}
 	}
 </script>
 
-<form on:submit|preventDefault={handleSubmit}>
+<form
+	onsubmit={(e) => {
+		e.preventDefault();
+		handleSubmit();
+	}}
+>
 	<div class="form-group">
 		<label for="wish-title">Title *</label>
 		<input
 			id="wish-title"
 			bind:value={title}
-			on:input={() => (titleTouched = true)}
-			on:blur={() => (titleTouched = true)}
+			oninput={() => (titleTouched = true)}
+			onblur={() => (titleTouched = true)}
 			class:field-invalid={!!titleError}
 			class:field-valid={titleTouched && !titleError}
 			placeholder="What do you wish for?"
@@ -171,7 +212,12 @@
 
 	<div class="form-group">
 		<label for="wish-desc">Description</label>
-		<textarea id="wish-desc" bind:value={description} rows="3" placeholder="More details…"></textarea>
+		<textarea
+			id="wish-desc"
+			bind:value={description}
+			rows="3"
+			placeholder="More details…"
+		></textarea>
 	</div>
 
 	<div class="form-group">
@@ -183,8 +229,8 @@
 				type="number"
 				min="0"
 				step="0.01"
-				on:input={() => (priceTouched = true)}
-				on:blur={() => (priceTouched = true)}
+				oninput={() => (priceTouched = true)}
+				onblur={() => (priceTouched = true)}
 				class:field-invalid={!!priceError}
 				class:field-valid={priceTouched && !priceError}
 				placeholder="0.00"
@@ -202,8 +248,8 @@
 		<input
 			id="wish-image-url"
 			bind:value={imageUrl}
-			on:input={() => (imageUrlTouched = true)}
-			on:blur={() => (imageUrlTouched = true)}
+			oninput={() => (imageUrlTouched = true)}
+			onblur={() => (imageUrlTouched = true)}
 			class:field-invalid={!!imageUrlError}
 			class:field-valid={imageUrlTouched && !imageUrlError}
 			placeholder="https://..."
@@ -211,7 +257,9 @@
 		{#if imageUrlError}
 			<p class="error-msg">{imageUrlError}</p>
 		{/if}
-		<p class="field-hint">You can paste an image URL, or upload one below.</p>
+		<p class="field-hint">
+			You can paste an image URL, or upload one below.
+		</p>
 	</div>
 
 	<div class="form-group">
@@ -220,7 +268,7 @@
 			id="wish-image-upload"
 			type="file"
 			accept="image/*"
-			on:change={handleImageFileChange}
+			onchange={handleImageFileChange}
 			disabled={uploadLoading || loading}
 		/>
 		{#if uploadLoading}
@@ -237,18 +285,24 @@
 			<input
 				id="tag-input"
 				bind:value={tagInput}
-				on:keydown={handleTagKeydown}
-				on:blur={handleTagBlur}
+				onkeydown={handleTagKeydown}
+				onblur={handleTagBlur}
 				placeholder="Add tag, press Enter or comma"
 			/>
-			<button type="button" class="btn-secondary add-btn" on:click={addTag}>Add</button>
+			<button type="button" class="btn-secondary add-btn" onclick={addTag}
+				>Add</button
+			>
 		</div>
 		{#if tags.length > 0}
 			<div class="tag-list">
 				{#each tags as tag}
 					<span class="tag tag-cyan">
 						{tag}
-						<button type="button" class="remove-tag" on:click={() => removeTag(tag)}>✕</button>
+						<button
+							type="button"
+							class="remove-tag"
+							onclick={() => removeTag(tag)}>✕</button
+						>
 					</span>
 				{/each}
 			</div>
@@ -261,18 +315,28 @@
 			<input
 				id="link-url-input"
 				bind:value={newLinkUrl}
-				on:input={() => {
+				oninput={() => {
 					linkUrlTouched = true;
-					linkAddError = '';
+					linkAddError = "";
 				}}
-				on:blur={() => (linkUrlTouched = true)}
+				onblur={() => (linkUrlTouched = true)}
 				class="link-url"
 				class:field-invalid={!!(linkAddError || liveLinkError)}
-				class:field-valid={linkUrlTouched && !!newLinkUrl.trim() && !(linkAddError || liveLinkError)}
+				class:field-valid={linkUrlTouched &&
+					!!newLinkUrl.trim() &&
+					!(linkAddError || liveLinkError)}
 				placeholder="https://..."
 			/>
-			<input bind:value={newLinkLabel} placeholder="Label (optional)" class="link-label" />
-			<button type="button" class="btn-secondary add-btn" on:click={addLink}>Add</button>
+			<input
+				bind:value={newLinkLabel}
+				placeholder="Label (optional)"
+				class="link-label"
+			/>
+			<button
+				type="button"
+				class="btn-secondary add-btn"
+				onclick={addLink}>Add</button
+			>
 		</div>
 		{#if linkAddError || liveLinkError}
 			<p class="error-msg">{linkAddError || liveLinkError}</p>
@@ -282,7 +346,11 @@
 				{#each links as link, i}
 					<li class="link-item">
 						<span class="link-text">{link.label || link.url}</span>
-						<button type="button" class="remove-tag" on:click={() => removeLink(i)}>✕</button>
+						<button
+							type="button"
+							class="remove-tag"
+							onclick={() => removeLink(i)}>✕</button
+						>
 					</li>
 				{/each}
 			</ul>
@@ -294,11 +362,16 @@
 	{/if}
 
 	<div class="form-actions">
-		<button type="button" class="btn-ghost" on:click={() => dispatch('cancel')} disabled={loading}>
+		<button
+			type="button"
+			class="btn-ghost"
+			onclick={() => oncancel?.()}
+			disabled={loading}
+		>
 			Cancel
 		</button>
 		<button type="submit" class="btn-primary" disabled={loading}>
-			{loading ? 'Saving…' : 'Save'}
+			{loading ? "Saving…" : "Save"}
 		</button>
 	</div>
 </form>
@@ -323,8 +396,14 @@
 		flex-wrap: wrap;
 	}
 
-	.link-url { flex: 2; min-width: 0; }
-	.link-label { flex: 1; min-width: 0; }
+	.link-url {
+		flex: 2;
+		min-width: 0;
+	}
+	.link-label {
+		flex: 1;
+		min-width: 0;
+	}
 
 	.price-row {
 		display: flex;

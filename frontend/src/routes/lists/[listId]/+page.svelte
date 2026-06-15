@@ -7,32 +7,31 @@
 	import WishCard from '$lib/components/WishCard.svelte';
 	import WishForm from '$lib/components/WishForm.svelte';
 	import Modal from '$lib/components/Modal.svelte';
-	import type { Wish, WishList, CreateWishData } from '$lib/types';
-	import { base } from '$app/paths';
+	import type { Wish, WishListSummary, CreateWishData } from '$lib/types';
+	import { resolve } from '$app/paths';
 
-	let listId: string;
-	let wishList: WishList | null = null;
-	let wishes: Wish[] = [];
-	let loading = true;
-	let error = '';
-	let showAddModal = false;
-	let editingWish: Wish | null = null;
-	let formLoading = false;
-	let shareCopied = false;
-	let showEditListModal = false;
-	let editListTitle = '';
-	let editListDescription = '';
-	let editListLoading = false;
-	let editListError = '';
-	let editListTitleTouched = false;
+	let wishList: WishListSummary | null = $state(null);
+	let wishes: Wish[] = $state([]);
+	let loading = $state(true);
+	let error = $state('');
+	let showAddModal = $state(false);
+	let editingWish: Wish | null = $state(null);
+	let formLoading = $state(false);
+	let shareCopied = $state(false);
+	let showEditListModal = $state(false);
+	let editListTitle = $state('');
+	let editListDescription = $state('');
+	let editListLoading = $state(false);
+	let editListError = $state('');
+	let editListTitleTouched = $state(false);
 
-	$: editListTitleError = editListTitleTouched && !editListTitle.trim() ? 'Title is required' : '';
+	let editListTitleError = $derived(editListTitleTouched && !editListTitle.trim() ? 'Title is required' : '');
 
-	$: listId = $page.params.listId as string;
+	let listId = $derived($page.params.listId as string);
 
 	onMount(async () => {
 		if (!$userStore) {
-			goto(`${base}/login`);
+			goto(resolve('/login'));
 			return;
 		}
 		await fetchData();
@@ -53,10 +52,10 @@
 		}
 	}
 
-	async function handleAddWish(e: CustomEvent<CreateWishData>) {
+	async function handleAddWish(data: CreateWishData) {
 		formLoading = true;
 		try {
-			const w = await createWish(listId, e.detail);
+			const w = await createWish(listId, data);
 			wishes = [...wishes, w];
 			showAddModal = false;
 		} catch (err: unknown) {
@@ -66,11 +65,11 @@
 		}
 	}
 
-	async function handleEditWish(e: CustomEvent<CreateWishData>) {
+	async function handleEditWish(data: CreateWishData) {
 		if (!editingWish) return;
 		formLoading = true;
 		try {
-			const updated = await updateWish(listId, editingWish.id, e.detail);
+			const updated = await updateWish(listId, editingWish.id, data);
 			wishes = wishes.map((w) => (w.id === updated.id ? updated : w));
 			editingWish = null;
 		} catch (err: unknown) {
@@ -80,11 +79,11 @@
 		}
 	}
 
-	async function handleDeleteWish(e: CustomEvent<string>) {
+	async function handleDeleteWish(id: string) {
 		if (!confirm('Delete this wish?')) return;
 		try {
-			await deleteWish(listId, e.detail);
-			wishes = wishes.filter((w) => w.id !== e.detail);
+			await deleteWish(listId, id);
+			wishes = wishes.filter((w) => w.id !== id);
 		} catch (err: unknown) {
 			alert(err instanceof Error ? err.message : 'Failed to delete');
 		}
@@ -92,7 +91,7 @@
 
 	async function handleShare() {
 		if (!wishList) return;
-		const url = `${window.location.origin}${base}/shared/${wishList.shareId}`;
+		const url = `${window.location.origin}${resolve(`/shared/${wishList.shareId}`)}`;
 		await navigator.clipboard.writeText(url);
 		shareCopied = true;
 		setTimeout(() => (shareCopied = false), 2000);
@@ -149,18 +148,18 @@
 	{:else if wishList}
 		<div class="page-header">
 			<div class="header-left">
-				<a href="{base}/dashboard" class="back-link">← My Lists</a>
+				<a href={resolve('/dashboard')} class="back-link">← My Lists</a>
 				<h1>{wishList.title}</h1>
 				{#if wishList.description}
 					<p class="list-desc">{wishList.description}</p>
 				{/if}
 			</div>
 			<div class="header-actions">
-				<button class="btn-ghost header-action-btn" on:click={openEditListModal}>Edit</button>
-				<button class="btn-ghost header-action-btn" on:click={handleShare}>
+				<button class="btn-ghost header-action-btn" onclick={openEditListModal}>Edit</button>
+				<button class="btn-ghost header-action-btn" onclick={handleShare}>
 					{shareCopied ? '✓ Copied!' : '🔗 Share'}
 				</button>
-				<button class="btn-primary header-action-btn" on:click={() => (showAddModal = true)}>
+				<button class="btn-primary header-action-btn" onclick={() => (showAddModal = true)}>
 					+ Add Wish
 				</button>
 			</div>
@@ -170,7 +169,7 @@
 			<div class="empty-state">
 				<h3>No wishes yet</h3>
 				<p>Add your first wish to this list!</p>
-				<button class="btn-primary" style="margin-top:1rem" on:click={() => (showAddModal = true)}>
+				<button class="btn-primary" style="margin-top:1rem" onclick={() => (showAddModal = true)}>
 					+ Add Wish
 				</button>
 			</div>
@@ -181,8 +180,8 @@
 						{wish}
 						isOwner={true}
 						canClaim={false}
-						on:edit={(e) => (editingWish = e.detail)}
-						on:delete={handleDeleteWish}
+						onedit={(w) => (editingWish = w)}
+						ondelete={handleDeleteWish}
 					/>
 				{/each}
 			</div>
@@ -190,34 +189,42 @@
 	{/if}
 </main>
 
-<Modal title="Add Wish" open={showAddModal} on:close={() => (showAddModal = false)}>
+<Modal title="Add Wish" open={showAddModal} onclose={() => (showAddModal = false)}>
 	<WishForm
 		loading={formLoading}
-		on:submit={handleAddWish}
-		on:cancel={() => (showAddModal = false)}
+		onsubmit={handleAddWish}
+		oncancel={() => (showAddModal = false)}
 	/>
 </Modal>
 
-<Modal title="Edit Wish" open={!!editingWish} on:close={() => (editingWish = null)}>
+<Modal title="Edit Wish" open={!!editingWish} onclose={() => (editingWish = null)}>
 	{#if editingWish}
 		<WishForm
-			initial={editingWish}
+			initial={{
+				title: editingWish.title,
+				description: editingWish.description || undefined,
+				approximatePrice: editingWish.approximatePrice || undefined,
+				currencyCode: editingWish.currencyCode || undefined,
+				imageUrl: editingWish.imageUrl || undefined,
+				tags: editingWish.tags,
+				links: editingWish.links.map(l => ({ url: l.url, label: l.label || null }))
+			}}
 			loading={formLoading}
-			on:submit={handleEditWish}
-			on:cancel={() => (editingWish = null)}
+			onsubmit={handleEditWish}
+			oncancel={() => (editingWish = null)}
 		/>
 	{/if}
 </Modal>
 
-<Modal title="Edit List" open={showEditListModal} on:close={closeEditListModal}>
-	<form on:submit|preventDefault={handleEditListSave}>
+<Modal title="Edit List" open={showEditListModal} onclose={closeEditListModal}>
+	<form onsubmit={(e) => { e.preventDefault(); handleEditListSave(); }}>
 		<div class="form-group">
 			<label for="edit-list-title">Title *</label>
 			<input
 				id="edit-list-title"
 				bind:value={editListTitle}
-				on:input={() => (editListTitleTouched = true)}
-				on:blur={() => (editListTitleTouched = true)}
+				oninput={() => (editListTitleTouched = true)}
+				onblur={() => (editListTitleTouched = true)}
 				class:field-invalid={!!editListTitleError}
 				class:field-valid={editListTitleTouched && !editListTitleError}
 				required
@@ -231,7 +238,7 @@
 			<p class="error-msg">{editListError}</p>
 		{/if}
 		<div class="modal-actions">
-			<button type="button" class="btn-ghost" on:click={closeEditListModal}>Cancel</button>
+			<button type="button" class="btn-ghost" onclick={closeEditListModal}>Cancel</button>
 			<button type="submit" class="btn-primary" disabled={editListLoading}>
 				{editListLoading ? 'Saving…' : 'Save'}
 			</button>
