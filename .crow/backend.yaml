@@ -1,0 +1,29 @@
+name: Build backend (Spring application)
+
+when:
+  - event: manual
+  - branch: main
+    event: push
+
+steps:
+  - name: test
+    image: maven:3.9-eclipse-temurin-25
+    commands: |
+      cd backend
+      mvn clean test -B
+  
+  - name: package (ghcr)
+    image: plugins/docker
+    settings:
+      context: backend
+      dockerfile: backend/Dockerfile
+      tags: 
+        - latest
+        - ${CI_COMMIT_SHA:0:7}
+      registry: ghcr.io
+      username:
+        from_secret: gh_username
+      password:
+        from_secret: gh_pat
+      repo: ghcr.io/dbarenholz/omiyage-backend
+        
