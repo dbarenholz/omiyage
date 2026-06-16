@@ -21,8 +21,17 @@ export const handleFetch: HandleFetch = async ({ event, request, fetch }) => {
 		request.headers.set('cookie', cookie);
 	}
 
-	// In Docker, route requests to the internal backend container instead of localhost
-	if (privateEnv.INTERNAL_API_URL && request.url.startsWith('http://localhost:8080/')) {
+	// In Docker, route requests to the internal backend container
+	let publicBase = 'http://localhost:8080/';
+	if (privateEnv.PUBLIC_API_URL) {
+		const apiUrl = privateEnv.PUBLIC_API_URL;
+		const apiPort = privateEnv.PUBLIC_API_PORT;
+		publicBase = apiPort ? `${apiUrl}:${apiPort}/` : `${apiUrl}/`;
+	}
+
+	if (privateEnv.INTERNAL_API_URL && request.url.startsWith(publicBase)) {
+		request = new Request(request.url.replace(publicBase, privateEnv.INTERNAL_API_URL), request);
+	} else if (privateEnv.INTERNAL_API_URL && request.url.startsWith('http://localhost:8080/')) {
 		request = new Request(request.url.replace('http://localhost:8080/', privateEnv.INTERNAL_API_URL), request);
 	}
 
