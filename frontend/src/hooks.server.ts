@@ -1,5 +1,6 @@
 import { redirect, type Handle, type HandleFetch } from '@sveltejs/kit';
 import { env as privateEnv } from '$env/dynamic/private';
+import { env as publicEnv } from '$env/dynamic/public';
 import { getMe } from '$lib/api';
 import { dev } from '$app/environment';
 
@@ -23,9 +24,9 @@ export const handleFetch: HandleFetch = async ({ event, request, fetch }) => {
 
 	// In Docker, route requests to the internal backend container
 	let publicBase = 'http://localhost:8080/';
-	if (privateEnv.PUBLIC_API_URL) {
-		const apiUrl = privateEnv.PUBLIC_API_URL;
-		const apiPort = privateEnv.PUBLIC_API_PORT;
+	if (publicEnv.PUBLIC_API_URL) {
+		const apiUrl = publicEnv.PUBLIC_API_URL;
+		const apiPort = publicEnv.PUBLIC_API_PORT;
 		const rawBase = apiPort ? `${apiUrl}:${apiPort}/` : `${apiUrl}/`;
 		// Use URL constructor to normalize default ports (e.g. :443 is removed for https)
 		publicBase = new URL(rawBase).origin + '/';
