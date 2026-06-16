@@ -26,7 +26,9 @@ export const handleFetch: HandleFetch = async ({ event, request, fetch }) => {
 	if (privateEnv.PUBLIC_API_URL) {
 		const apiUrl = privateEnv.PUBLIC_API_URL;
 		const apiPort = privateEnv.PUBLIC_API_PORT;
-		publicBase = apiPort ? `${apiUrl}:${apiPort}/` : `${apiUrl}/`;
+		const rawBase = apiPort ? `${apiUrl}:${apiPort}/` : `${apiUrl}/`;
+		// Use URL constructor to normalize default ports (e.g. :443 is removed for https)
+		publicBase = new URL(rawBase).origin + '/';
 	}
 
 	if (privateEnv.INTERNAL_API_URL && request.url.startsWith(publicBase)) {

@@ -13,7 +13,7 @@
 
     <groupId>online.dbarenholz</groupId>
     <artifactId>omiyage</artifactId>
-    <version>0.1.1</version>
+    <version>0.1.2</version>
     <name>omiyage</name>
     <description>Omiyage Backend Application</description>
 
