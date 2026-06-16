@@ -9,11 +9,11 @@ import online.dbarenholz.omiyage.dto.WishResponse;
 import online.dbarenholz.omiyage.entity.User;
 import online.dbarenholz.omiyage.entity.WishList;
 import online.dbarenholz.omiyage.repository.WishListRepository;
-import org.springframework.http.HttpStatus;
+import online.dbarenholz.omiyage.exception.ResourceNotFoundException;
+import online.dbarenholz.omiyage.exception.UnauthorizedAccessException;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
@@ -53,18 +53,18 @@ public class WishListService {
     @Transactional(readOnly = true)
     public WishListResponse getList(UUID listId, User currentUser) {
         WishList list = wishListRepository.findByIdWithWishes(listId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "List not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("List not found"));
         if (!list.getOwner().getId().equals(currentUser.getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+            throw new UnauthorizedAccessException("Access denied");
         }
         return toDetailResponse(list, currentUser, list.getOwner().getId());
     }
 
     public WishListResponse updateList(UUID listId, User currentUser, UpdateListRequest request) {
         WishList list = wishListRepository.findById(listId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "List not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("List not found"));
         if (!list.getOwner().getId().equals(currentUser.getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+            throw new UnauthorizedAccessException("Access denied");
         }
         if (request.title() != null) list.setTitle(request.title());
         if (request.description() != null) list.setDescription(request.description());
@@ -74,9 +74,9 @@ public class WishListService {
 
     public void deleteList(UUID listId, User currentUser) {
         WishList list = wishListRepository.findById(listId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "List not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("List not found"));
         if (!list.getOwner().getId().equals(currentUser.getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+            throw new UnauthorizedAccessException("Access denied");
         }
         wishListRepository.delete(list);
     }
@@ -84,7 +84,7 @@ public class WishListService {
     @Transactional(readOnly = true)
     public WishListResponse getSharedList(UUID shareId, @Nullable User viewer) {
         WishList list = wishListRepository.findByShareIdWithWishes(shareId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "List not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("List not found"));
         return toDetailResponse(list, viewer, list.getOwner().getId());
     }
 

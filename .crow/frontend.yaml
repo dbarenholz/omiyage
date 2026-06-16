@@ -1,0 +1,29 @@
+name: frontend
+
+when:
+  - event: push
+    branch: main
+  - event: pull_request
+  - event: tag
+
+steps:
+  - name: test-frontend-unit
+    image: oven/bun:1-alpine
+    commands:
+      - cd frontend
+      - bun install
+      - bun run test:unit
+
+  - name: package-frontend-test
+    image: woodpeckerci/plugin-kaniko
+    settings:
+      context: frontend
+      dockerfile: frontend/Dockerfile
+      tags: 
+        - ${CI_COMMIT_SHA:0:7}-test
+      registry: ghcr.io
+      username:
+        from_secret: gh_username
+      password:
+        from_secret: gh_pat
+      repo: ghcr.io/dbarenholz/omiyage-frontend

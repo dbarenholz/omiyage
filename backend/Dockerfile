@@ -19,4 +19,9 @@ USER omiyage
 ENV SERVER_PORT=8080
 EXPOSE 8080
 
-CMD ["java", "-jar", "app.jar"]
+LABEL org.opencontainers.image.source="https://github.com/dbarenholz/omiyage" \
+      org.opencontainers.image.title="Omiyage Backend" \
+      org.opencontainers.image.description="Backend for the Omiyage wish-list application" \
+      org.opencontainers.image.authors="dbarenholz"
+
+CMD ["java", "-jar", "/app/app.jar"]

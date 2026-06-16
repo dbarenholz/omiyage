@@ -5,6 +5,11 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    # NOTE: these cannot be in .env, since then vite preview picks them up
+    #       it's necessary in docker so playwright understands where to poke at the backend and frontend
+    environment:
+      - INTERNAL_API_URL=http://backend:8080/
+      - ORIGIN=http://localhost:3000
     depends_on:
       - backend
     ports:

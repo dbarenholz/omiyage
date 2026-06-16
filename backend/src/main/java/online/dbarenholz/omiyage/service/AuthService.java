@@ -7,27 +7,39 @@ import online.dbarenholz.omiyage.dto.SignupResponse;
 import online.dbarenholz.omiyage.dto.UserResponse;
 import online.dbarenholz.omiyage.entity.User;
 import online.dbarenholz.omiyage.repository.UserRepository;
-import org.springframework.http.HttpStatus;
+import online.dbarenholz.omiyage.exception.UnauthorizedAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
+import java.security.SecureRandom;
 import java.time.Instant;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.Collections;
+import java.util.regex.Pattern;
+
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
-    /** Inclusive lower bound of the Mullvad-style account number range (16 digits). */
+    /**
+     * Inclusive lower bound of the Mullvad-style account number range (16 digits).
+     */
     private static final long ACCOUNT_NUMBER_MIN = 1_000_000_000_000_000L;
     /** Exclusive upper bound (all digits 9 = 9999999999999999, +1 for nextLong). */
     private static final long ACCOUNT_NUMBER_MAX = 10_000_000_000_000_000L;
 
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final Pattern NON_DIGIT_PATTERN = Pattern.compile("[^0-9]");
+
     private final UserRepository userRepository;
 
     /**
-     * Generates a random 16-digit account number in the Mullvad range that is not yet in use.
+     * Generates a random 16-digit account number in the Mullvad range that is not
+     * yet in use.
      */
     private long generateUniqueAccountNumber() {
         long number;
@@ -36,7 +48,7 @@ public class AuthService {
             if (++attempts > 100) {
                 throw new IllegalStateException("Unable to generate a unique account number after 100 attempts");
             }
-            number = ThreadLocalRandom.current().nextLong(ACCOUNT_NUMBER_MIN, ACCOUNT_NUMBER_MAX);
+            number = SECURE_RANDOM.nextLong(ACCOUNT_NUMBER_MIN, ACCOUNT_NUMBER_MAX);
         } while (userRepository.findByAccountNumber(number).isPresent());
         return number;
     }
@@ -50,10 +62,11 @@ public class AuthService {
     }
 
     /**
-     * Parses a formatted account number (with or without dashes/spaces) into a raw {@code long}.
+     * Parses a formatted account number (with or without dashes/spaces) into a raw
+     * {@code long}.
      */
     public static long parseAccountNumber(String formatted) {
-        return Long.parseLong(formatted.replaceAll("[^0-9]", ""));
+        return Long.parseLong(NON_DIGIT_PATTERN.matcher(formatted).replaceAll(""));
     }
 
     @Transactional
@@ -70,17 +83,21 @@ public class AuthService {
         try {
             accountNumber = parseAccountNumber(rawAccountNumber);
         } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid account number");
+            throw new UnauthorizedAccessException("Invalid account number");
         }
 
         User user = userRepository.findByAccountNumber(accountNumber)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid account number"));
+                .orElseThrow(() -> new UnauthorizedAccessException("Invalid account number"));
 
         user.setLastLoginAt(Instant.now());
         userRepository.save(user);
 
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(new UsernamePasswordAuthenticationToken(user, null, Collections.emptyList()));
+        SecurityContextHolder.setContext(context);
+
         HttpSession session = request.getSession(true);
-        session.setAttribute("USER_ID", user.getId());
+        session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
 
         return toUserResponse(user);
     }
@@ -96,7 +113,6 @@ public class AuthService {
         return new UserResponse(
                 formatAccountNumber(user.getAccountNumber()),
                 user.getDisplayName(),
-                user.getCreatedAt()
-        );
+                user.getCreatedAt());
     }
 }

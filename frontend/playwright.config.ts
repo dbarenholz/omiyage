@@ -11,7 +11,7 @@ export default defineConfig({
 
     use: {
         // Port where your SvelteKit preview server runs
-        baseURL: 'http://localhost:4173',
+        baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:4173',
         trace: 'on-first-retry',
     },
 
@@ -28,7 +28,7 @@ export default defineConfig({
 
     // Starts SvelteKit before tests run. 
     // You must spin up your Spring Docker Compose independently before running tests.
-    webServer: {
+    webServer: process.env.PLAYWRIGHT_SKIP_WEBSERVER ? undefined : {
         command: 'bun run build && bun run preview',
         url: 'http://localhost:4173',
         reuseExistingServer: !process.env.CI,

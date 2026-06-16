@@ -11,6 +11,9 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreRemove;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -73,4 +76,13 @@ public class Wish {
 
     @OneToOne(mappedBy = "wish", cascade = CascadeType.ALL, orphanRemoval = true)
     private WishClaim claim;
+
+    @PrePersist
+    @PreUpdate
+    @PreRemove
+    protected void onUpdate() {
+        if (this.list != null) {
+            this.list.setUpdatedAt(Instant.now());
+        }
+    }
 }

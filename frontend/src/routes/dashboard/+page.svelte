@@ -1,139 +1,49 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { enhance } from '$app/forms';
+	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { Pencil, X } from 'lucide-svelte';
-	import { getLists, createList, updateList, deleteList } from '$lib/api';
-	import { userStore } from '$lib/stores';
 	import ListCard from '$lib/components/ListCard.svelte';
 	import Modal from '$lib/components/Modal.svelte';
-	import type { WishList, WishListSummary } from '$lib/types';
-	import { resolve } from '$app/paths';
-	import { browser } from '$app/environment';
+	import type { WishListSummary } from '$lib/types';
 
 	type ListSortMode = 'alphabetical' | 'wish-count' | 'created-date' | 'modified-date';
 
-	let lists: WishListSummary[] = $state([]);
-	let loading = $state(true);
-	let error = $state('');
+	let { data, form } = $props();
+
+	let lists = $derived(data.lists);
+	
 	let showCreateModal = $state(false);
-	let createTitle = $state('');
-	let createDesc = $state('');
 	let createLoading = $state(false);
-	let createError = $state('');
-	let createTitleTouched = $state(false);
+
 	let showEditModal = $state(false);
 	let editingList: WishListSummary | null = $state(null);
-	let editTitle = $state('');
-	let editDesc = $state('');
 	let editLoading = $state(false);
-	let editError = $state('');
-	let editTitleTouched = $state(false);
-	let sortMode: ListSortMode = $state((browser && localStorage.getItem('omiyage-sort-mode') as ListSortMode) || 'modified-date');
 
-	let createTitleError = $derived(createTitleTouched && !createTitle.trim() ? 'Title is required' : '');
-	let editTitleError = $derived(editTitleTouched && !editTitle.trim() ? 'Title is required' : '');
+	let sortMode: ListSortMode = $derived(
+		($page.url.searchParams.get('sort') as ListSortMode) || 'modified-date'
+	);
+
 	let sortedLists = $derived([...lists].sort((a, b) => compareLists(a, b, sortMode)));
 
-	onMount(async () => {
-		if (!$userStore) {
-			goto(resolve('/login'));
-			return;
-		}
-		
-		await fetchLists();
-	});
-
-	$effect(() => {
-		if (browser) {
-			localStorage.setItem('omiyage-sort-mode', sortMode);
-		}
-	});
-
-	async function fetchLists() {
-		loading = true;
-		error = '';
-		try {
-			lists = await getLists();
-		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to load lists';
-		} finally {
-			loading = false;
-		}
-	}
-
-	async function handleCreate() {
-		createError = '';
-		createTitleTouched = true;
-		if (createTitleError) {
-			createError = 'Title is required';
-			return;
-		}
-		createLoading = true;
-		try {
-			const newList = await createList(createTitle.trim(), createDesc.trim() || undefined);
-			lists = [{ ...newList, wishCount: 0, updatedAt: newList.createdAt }, ...lists];
-			showCreateModal = false;
-			createTitle = '';
-			createDesc = '';
-			createTitleTouched = false;
-		} catch (e: unknown) {
-			createError = e instanceof Error ? e.message : 'Failed to create list';
-		} finally {
-			createLoading = false;
-		}
+	function handleSortChange(e: Event) {
+		const target = e.target as HTMLSelectElement;
+		const url = new URL($page.url);
+		url.searchParams.set('sort', target.value);
+		goto(url, { replaceState: true, keepFocus: true });
 	}
 
 	function openEditModal(list: WishListSummary) {
 		editingList = list;
-		editTitle = list.title;
-		editDesc = list.description || '';
-		editError = '';
-		editTitleTouched = false;
 		showEditModal = true;
 	}
 
-	function closeEditModal() {
-		showEditModal = false;
-		editingList = null;
-		editTitle = '';
-		editDesc = '';
-		editError = '';
-		editTitleTouched = false;
-	}
+	let deleteForm: HTMLFormElement;
+	let deleteId = $state('');
 
-	async function handleUpdate() {
-		if (!editingList) return;
-		editError = '';
-		editTitleTouched = true;
-
-		if (editTitleError) {
-			editError = 'Title is required';
-			return;
-		}
-
-		editLoading = true;
-		try {
-			const updated = await updateList(editingList.id, {
-				title: editTitle.trim(),
-				description: editDesc.trim() || undefined
-			});
-			lists = lists.map((list) => (list.id === updated.id ? { ...list, title: updated.title, description: updated.description } : list));
-			closeEditModal();
-		} catch (e: unknown) {
-			editError = e instanceof Error ? e.message : 'Failed to update list';
-		} finally {
-			editLoading = false;
-		}
-	}
-
-	async function handleDelete(listId: string) {
+	function handleDelete(id: string) {
 		if (!confirm('Delete this list and all its wishes?')) return;
-		try {
-			await deleteList(listId);
-			lists = lists.filter((l) => l.id !== listId);
-		} catch (e: unknown) {
-			alert(e instanceof Error ? e.message : 'Failed to delete');
-		}
+		deleteId = id;
+		setTimeout(() => deleteForm.requestSubmit(), 0);
 	}
 
 	function compareLists(a: WishListSummary, b: WishListSummary, mode: ListSortMode): number {
@@ -170,7 +80,7 @@
 		<div class="header-controls">
 			<div class="sort-control">
 				<label for="sort-mode">Sort</label>
-				<select id="sort-mode" bind:value={sortMode}>
+				<select id="sort-mode" value={sortMode} onchange={handleSortChange}>
 					<option value="modified-date">Modified Date</option>
 					<option value="created-date">Creation Date</option>
 					<option value="wish-count"># Wishes</option>
@@ -181,11 +91,7 @@
 		</div>
 	</div>
 
-	{#if loading}
-		<div class="loading">Loading your lists…</div>
-	{:else if error}
-		<p class="error-msg">{error}</p>
-	{:else if lists.length === 0}
+	{#if lists.length === 0}
 		<div class="empty-state">
 			<h3>No wishlists yet</h3>
 			<p>Create your first list to get started!</p>
@@ -208,37 +114,46 @@
 	{/if}
 </main>
 
+<form method="POST" action="?/delete" use:enhance bind:this={deleteForm} style="display:none">
+	<input type="hidden" name="id" bind:value={deleteId} />
+</form>
+
 <Modal title="New Omiyage" open={showCreateModal} onclose={() => (showCreateModal = false)}>
-	<form onsubmit={(e) => { e.preventDefault(); handleCreate(); }}>
+	<form method="POST" action="?/create" use:enhance={() => {
+		createLoading = true;
+		return async ({ result, update }) => {
+			createLoading = false;
+			if (result.type === 'success') showCreateModal = false;
+			await update();
+		};
+	}}>
 		<div class="form-group">
 			<label for="list-title">Title *</label>
 			<input
 				id="list-title"
-				bind:value={createTitle}
-				oninput={() => (createTitleTouched = true)}
-				onblur={() => (createTitleTouched = true)}
-				class:field-invalid={!!createTitleError}
-				class:field-valid={createTitleTouched && !createTitleError}
+				name="title"
+				value={form?.createError ? form.title : ''}
 				placeholder="e.g. Birthday 2025"
 				required
 			/>
 		</div>
 		<div class="form-group">
 			<label for="list-desc">Description</label>
-			<input id="list-desc" bind:value={createDesc} placeholder="Optional description" />
+			<input 
+				id="list-desc" 
+				name="description" 
+				value={form?.createError ? form.description : ''} 
+				placeholder="Optional description" 
+			/>
 		</div>
-		{#if createError}
-			<p class="error-msg">{createError}</p>
+		{#if form?.createError}
+			<p class="error-msg">{form.createError}</p>
 		{/if}
 		<div class="modal-actions">
 			<button
 				type="button"
 				class="btn-ghost"
-				onclick={() => {
-					showCreateModal = false;
-					createTitleTouched = false;
-					createError = '';
-				}}
+				onclick={() => { showCreateModal = false; }}
 			>Cancel</button>
 			<button type="submit" class="btn-primary" disabled={createLoading}>
 				{createLoading ? 'Creating…' : 'Create'}
@@ -247,30 +162,40 @@
 	</form>
 </Modal>
 
-<Modal title="Edit Omiyage" open={showEditModal} onclose={closeEditModal}>
-	<form onsubmit={(e) => { e.preventDefault(); handleUpdate(); }}>
+<Modal title="Edit Omiyage" open={showEditModal} onclose={() => (showEditModal = false)}>
+	<form method="POST" action="?/update" use:enhance={() => {
+		editLoading = true;
+		return async ({ result, update }) => {
+			editLoading = false;
+			if (result.type === 'success') showEditModal = false;
+			await update();
+		};
+	}}>
+		<input type="hidden" name="id" value={editingList?.id || ''} />
 		<div class="form-group">
 			<label for="edit-list-title">Title *</label>
 			<input
 				id="edit-list-title"
-				bind:value={editTitle}
-				oninput={() => (editTitleTouched = true)}
-				onblur={() => (editTitleTouched = true)}
-				class:field-invalid={!!editTitleError}
-				class:field-valid={editTitleTouched && !editTitleError}
+				name="title"
+				value={form?.editError ? form.title : (editingList?.title || '')}
 				placeholder="e.g. Birthday 2025"
 				required
 			/>
 		</div>
 		<div class="form-group">
 			<label for="edit-list-desc">Description</label>
-			<input id="edit-list-desc" bind:value={editDesc} placeholder="Optional description" />
+			<input 
+				id="edit-list-desc" 
+				name="description" 
+				value={form?.editError ? form.description : (editingList?.description || '')} 
+				placeholder="Optional description" 
+			/>
 		</div>
-		{#if editError}
-			<p class="error-msg">{editError}</p>
+		{#if form?.editError}
+			<p class="error-msg">{form.editError}</p>
 		{/if}
 		<div class="modal-actions">
-			<button type="button" class="btn-ghost" onclick={closeEditModal}>Cancel</button>
+			<button type="button" class="btn-ghost" onclick={() => (showEditModal = false)}>Cancel</button>
 			<button type="submit" class="btn-primary" disabled={editLoading}>
 				{editLoading ? 'Saving…' : 'Save'}
 			</button>

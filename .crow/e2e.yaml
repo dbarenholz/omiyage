@@ -1,0 +1,96 @@
+name: e2e
+
+depends_on:
+  - frontend
+  - backend
+
+when:
+  - event: push
+    branch: main
+  - event: pull_request
+  - event: tag
+
+services:
+  - name: db
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: omiyage
+      POSTGRES_USER: omiyage
+      POSTGRES_HOST_AUTH_METHOD: trust
+
+  - name: minio
+    image: minio/minio:latest
+    commands:
+      - minio server /data
+
+  - name: backend
+    image: ghcr.io/dbarenholz/omiyage-backend:${CI_COMMIT_SHA:0:7}-test
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/omiyage
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_PUBLIC_URL: http://minio:9000
+
+  - name: frontend
+    image: ghcr.io/dbarenholz/omiyage-frontend:${CI_COMMIT_SHA:0:7}-test
+    environment:
+      INTERNAL_API_URL: http://backend:8080/
+      ORIGIN: http://localhost:3000
+
+steps:
+  - name: test-e2e
+    image: mcr.microsoft.com/playwright:v1.60.0-noble
+    environment:
+      PLAYWRIGHT_SKIP_WEBSERVER: "true"
+      PLAYWRIGHT_BASE_URL: "http://localhost:3000"
+    commands: |
+      apt-get update && apt-get install -y unzip curl socat
+      curl -fsSL https://bun.sh/install | bash
+      export PATH="$HOME/.bun/bin:$PATH"
+      
+      echo "Waiting for database to be available..."
+      while ! bash -c '</dev/tcp/db/5432' 2>/dev/null; do sleep 2; done
+      echo "Database is up!"
+      
+      echo "Waiting for minio to be available..."
+      while ! curl -s http://minio:9000/minio/health/live > /dev/null; do sleep 2; done
+      echo "Minio is up!"
+      
+      echo "Waiting for backend to be available..."
+      while ! curl -s http://backend:8080 > /dev/null; do sleep 2; done
+      echo "Backend is up!"
+      
+      echo "Waiting for frontend to be available..."
+      while ! curl -s http://frontend:3000 > /dev/null; do sleep 2; done
+      echo "Frontend is up!"
+      
+      echo "Port-forwarding localhost:3000 to frontend:3000 and localhost:8080 to backend:8080 for SameSite cookies..."
+      socat TCP-LISTEN:3000,fork TCP:frontend:3000 &
+      socat TCP-LISTEN:8080,fork TCP:backend:8080 &
+      
+      cd frontend
+      bun install
+      bun run playwright install
+      bun x playwright test
+
+  - name: publish-images
+    image: quay.io/skopeo/stable:latest
+    when:
+      - event: push
+        branch: main
+      - event: tag
+    environment:
+      GH_USERNAME:
+        from_secret: gh_username
+      GH_PAT:
+        from_secret: gh_pat
+    commands: |
+      skopeo login ghcr.io -u $GH_USERNAME -p $GH_PAT
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        skopeo copy docker://ghcr.io/dbarenholz/omiyage-frontend:${CI_COMMIT_SHA:0:7}-test docker://ghcr.io/dbarenholz/omiyage-frontend:${CI_COMMIT_TAG}
+        skopeo copy docker://ghcr.io/dbarenholz/omiyage-backend:${CI_COMMIT_SHA:0:7}-test docker://ghcr.io/dbarenholz/omiyage-backend:${CI_COMMIT_TAG}
+      else
+        skopeo copy docker://ghcr.io/dbarenholz/omiyage-frontend:${CI_COMMIT_SHA:0:7}-test docker://ghcr.io/dbarenholz/omiyage-frontend:latest
+        skopeo copy docker://ghcr.io/dbarenholz/omiyage-frontend:${CI_COMMIT_SHA:0:7}-test docker://ghcr.io/dbarenholz/omiyage-frontend:${CI_COMMIT_SHA:0:7}
+        skopeo copy docker://ghcr.io/dbarenholz/omiyage-backend:${CI_COMMIT_SHA:0:7}-test docker://ghcr.io/dbarenholz/omiyage-backend:latest
+        skopeo copy docker://ghcr.io/dbarenholz/omiyage-backend:${CI_COMMIT_SHA:0:7}-test docker://ghcr.io/dbarenholz/omiyage-backend:${CI_COMMIT_SHA:0:7}
+      fi

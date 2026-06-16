@@ -1,21 +1,23 @@
 <script lang="ts">
-	import '../app.scss';
-	import NavBar from '$lib/components/NavBar.svelte';
-	import { userStore, loadUser } from '$lib/stores';
-	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import "../app.scss";
+	import NavBar from "$lib/components/NavBar.svelte";
+	import { userStore } from "$lib/stores";
+	import { page } from "$app/state";
 
-	let { children } = $props();
+	let { data, children } = $props();
 
-	const publicRoutes = ['/login', '/signup'];
-
-	onMount(async () => {
-		if ($userStore === null) {
-			await loadUser();
+	// Initialize store from server data
+	$effect(() => {
+		if (data.user !== undefined) {
+			userStore.set(data.user);
 		}
 	});
 
-	let showNav = $derived(!publicRoutes.some((r) => $page.url.pathname.endsWith(r)));
+	const publicRoutes = ["/login", "/signup"];
+
+	let showNav = $derived(
+		!publicRoutes.some((r) => page.url.pathname.endsWith(r)),
+	);
 </script>
 
 {#if showNav && $userStore}

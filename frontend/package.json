@@ -1,6 +1,6 @@
 {
   "name": "omiyage-frontend",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,9 +12,9 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "test:unit": "NODE_OPTIONS=--no-experimental-webstorage vitest",
     "test:unit:watch": "NODE_OPTIONS=--no-experimental-webstorage vitest --watch",
-    "test:e2e": "docker compose -f ../backend/docker-compose.yml up -d && bunx playwright test; EXIT_CODE=$?; docker compose -f ../backend/docker-compose.yml down; exit $EXIT_CODE",
-    "test:e2e:ui": "docker compose -f ../backend/docker-compose.yml up -d && bunx playwright test --ui; EXIT_CODE=$?; docker compose -f ../backend/docker-compose.yml down; exit $EXIT_CODE",
-    "test:e2e:debug": "docker compose -f ../backend/docker-compose.yml up -d && bunx playwright test --debug; EXIT_CODE=$?; docker compose -f ../backend/docker-compose.yml down; exit $EXIT_CODE",
+    "test:e2e": "docker rm -f omiyage-db omiyage-minio omiyage-backend omiyage-frontend 2>/dev/null || true; docker compose -f ../backend/docker-compose.yml up -d && bunx playwright test; EXIT_CODE=$?; docker compose -f ../backend/docker-compose.yml down; exit $EXIT_CODE",
+    "test:e2e:ui": "docker rm -f omiyage-db omiyage-minio omiyage-backend omiyage-frontend 2>/dev/null || true; docker compose -f ../backend/docker-compose.yml up -d && bunx playwright test --ui; EXIT_CODE=$?; docker compose -f ../backend/docker-compose.yml down; exit $EXIT_CODE",
+    "test:e2e:debug": "docker rm -f omiyage-db omiyage-minio omiyage-backend omiyage-frontend 2>/dev/null || true; docker compose -f ../backend/docker-compose.yml up -d && bunx playwright test --debug; EXIT_CODE=$?; docker compose -f ../backend/docker-compose.yml down; exit $EXIT_CODE",
     "test:e2e:report": "bunx playwright show-report",
     "generate:api": "openapi-typescript ../backend/target/openapi.json -o src/lib/types-dto.ts"
   },
@@ -46,7 +46,9 @@
   },
   "trustedDependencies": [
     "@parcel/watcher",
-    "esbuild"
+    "esbuild",
+    "msw",
+    "playwright"
   ],
   "msw": {
     "workerDirectory": [

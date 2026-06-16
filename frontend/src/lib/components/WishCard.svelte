@@ -38,6 +38,26 @@
 			return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(price);
 		}
 	}
+
+	function sanitizeUrl(url: string): string {
+		try {
+			const parsed = new URL(url);
+			if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+				return url;
+			}
+			return 'about:blank';
+		} catch {
+			return 'about:blank';
+		}
+	}
+
+	function getHostname(url: string): string {
+		try {
+			return new URL(url).hostname;
+		} catch {
+			return 'Link';
+		}
+	}
 </script>
 
 <div class="wish-card" class:claimed={wish.claimed}>
@@ -62,7 +82,7 @@
 
 	{#if wish.imageUrl}
 		<div class="image-wrap">
-			<img src={wish.imageUrl} alt={wish.title} loading="lazy" />
+			<img src={sanitizeUrl(wish.imageUrl)} alt={wish.title} loading="lazy" />
 		</div>
 	{/if}
 
@@ -77,8 +97,8 @@
 	{#if wish.links.length > 0}
 		<div class="links">
 			{#each wish.links as link}
-				<a href={link.url} target="_blank" rel="noopener noreferrer" class="link-pill">
-					🔗 {link.label || new URL(link.url).hostname}
+				<a href={sanitizeUrl(link.url)} target="_blank" rel="noopener noreferrer" class="link-pill">
+					🔗 {link.label || getHostname(link.url)}
 				</a>
 			{/each}
 		</div>

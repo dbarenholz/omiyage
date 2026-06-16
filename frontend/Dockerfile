@@ -22,4 +22,9 @@ ENV NODE_ENV=production
 ENV PORT=3000
 EXPOSE 3000
 
-CMD ["bun", "./build/index.js"]
+LABEL org.opencontainers.image.source="https://github.com/dbarenholz/omiyage" \
+      org.opencontainers.image.title="Omiyage Frontend" \
+      org.opencontainers.image.description="Frontend for the Omiyage wish-list application" \
+      org.opencontainers.image.authors="dbarenholz"
+
+CMD ["bun", "/app/build/index.js"]

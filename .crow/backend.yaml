@@ -1,29 +1,36 @@
-name: Build backend (Spring application)
+name: backend
 
 when:
-  - event: manual
-  - branch: main
-    event: push
+  - event: push
+    branch: main
+  - event: pull_request
+  - event: tag
+
+services:
+  - name: db
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: omiyage
+      POSTGRES_DB: omiyage
+      POSTGRES_HOST_AUTH_METHOD: trust
 
 steps:
-  - name: test
+  - name: test-backend-unit
     image: maven:3.9-eclipse-temurin-25
     commands: |
       cd backend
-      mvn clean test -B
-  
-  - name: package (ghcr)
-    image: plugins/docker
+      mvn clean test -B -Dspring.profiles.active=ci
+
+  - name: package-backend-test
+    image: woodpeckerci/plugin-kaniko
     settings:
       context: backend
       dockerfile: backend/Dockerfile
       tags: 
-        - latest
-        - ${CI_COMMIT_SHA:0:7}
+        - ${CI_COMMIT_SHA:0:7}-test
       registry: ghcr.io
       username:
         from_secret: gh_username
       password:
         from_secret: gh_pat
       repo: ghcr.io/dbarenholz/omiyage-backend
-        

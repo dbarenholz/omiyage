@@ -11,12 +11,11 @@ import online.dbarenholz.omiyage.entity.WishList;
 import online.dbarenholz.omiyage.entity.WishTag;
 import online.dbarenholz.omiyage.repository.WishListRepository;
 import online.dbarenholz.omiyage.repository.WishRepository;
-import org.springframework.http.HttpStatus;
+import online.dbarenholz.omiyage.exception.ResourceNotFoundException;
+import online.dbarenholz.omiyage.exception.UnauthorizedAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -68,7 +67,6 @@ public class WishService {
         }
 
         Wish saved = wishRepository.save(wish);
-        touchList(list);
         return wishMapper.toResponse(saved, currentUser, list.getOwner().getId());
     }
 
@@ -76,11 +74,16 @@ public class WishService {
         WishList list = requireOwner(listId, currentUser);
         Wish wish = requireWishInList(wishId, listId);
 
-        if (request.title() != null) wish.setTitle(request.title());
-        if (request.description() != null) wish.setDescription(request.description());
-        if (request.approximatePrice() != null) wish.setApproximatePrice(request.approximatePrice());
-        if (request.currencyCode() != null) wish.setCurrencyCode(normalizeCurrency(request.currencyCode()));
-        if (request.imageUrl() != null) wish.setImageUrl(normalizeOptionalText(request.imageUrl()));
+        if (request.title() != null)
+            wish.setTitle(request.title());
+        if (request.description() != null)
+            wish.setDescription(request.description());
+        if (request.approximatePrice() != null)
+            wish.setApproximatePrice(request.approximatePrice());
+        if (request.currencyCode() != null)
+            wish.setCurrencyCode(normalizeCurrency(request.currencyCode()));
+        if (request.imageUrl() != null)
+            wish.setImageUrl(normalizeOptionalText(request.imageUrl()));
 
         if (request.links() != null) {
             wish.getLinks().clear();
@@ -104,35 +107,28 @@ public class WishService {
         }
 
         Wish savedWish = wishRepository.save(wish);
-        touchList(list);
         return wishMapper.toResponse(savedWish, currentUser, list.getOwner().getId());
     }
 
     public void deleteWish(UUID listId, UUID wishId, User currentUser) {
-        WishList list = requireOwner(listId, currentUser);
         Wish wish = requireWishInList(wishId, listId);
         wishRepository.delete(wish);
-        touchList(list);
-    }
-
-    private void touchList(WishList list) {
-        list.setUpdatedAt(Instant.now());
     }
 
     private WishList requireOwner(UUID listId, User user) {
         WishList list = wishListRepository.findById(listId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "List not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("List not found"));
         if (!list.getOwner().getId().equals(user.getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+            throw new UnauthorizedAccessException("Access denied");
         }
         return list;
     }
 
     private Wish requireWishInList(UUID wishId, UUID listId) {
         Wish wish = wishRepository.findByIdWithDetails(wishId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Wish not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Wish not found"));
         if (!wish.getList().getId().equals(listId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Wish not found in this list");
+            throw new ResourceNotFoundException("Wish not found in this list");
         }
         return wish;
     }
@@ -143,7 +139,8 @@ public class WishService {
     }
 
     private String normalizeOptionalText(String value) {
-        if (value == null) return null;
+        if (value == null)
+            return null;
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
     }

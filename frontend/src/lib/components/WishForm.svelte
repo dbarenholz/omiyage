@@ -2,17 +2,26 @@
 	import { uploadWishImage } from "$lib/api";
 	import { currencyOptions } from "$lib/currencies";
 	import type { CreateWishData, WishLink } from "$lib/types";
+	import { enhance } from "$app/forms";
 
 	let {
 		initial = {},
 		loading = false,
 		onsubmit,
 		oncancel,
+		action,
+		formError,
+		enhanceHandler,
+		id,
 	}: {
 		initial?: Partial<CreateWishData>;
 		loading?: boolean;
 		onsubmit?: (data: CreateWishData) => void;
 		oncancel?: () => void;
+		action?: string;
+		formError?: string;
+		enhanceHandler?: any;
+		id?: string;
 	} = $props();
 
 	// svelte-ignore state_referenced_locally
@@ -43,7 +52,9 @@
 	let linkAddError = $state("");
 	let uploadLoading = $state(false);
 	let uploadError = $state("");
-	let error = $state("");
+	let localError = $state("");
+
+	let error = $derived(formError || localError);
 
 	let normalizedTitle = $derived(title.trim());
 	let parsedPrice = $derived(
@@ -123,39 +134,46 @@
 		links = links.filter((_, i) => i !== index);
 	}
 
-	function handleSubmit() {
-		error = "";
+	function handleSubmit(e: Event) {
+		localError = "";
 		titleTouched = true;
 		priceTouched = true;
 		imageUrlTouched = true;
 
 		if (titleError) {
-			error = "Title is required";
+			localError = "Title is required";
+			e.preventDefault();
 			return;
 		}
 		if (priceError) {
-			error = "Invalid price";
+			localError = "Invalid price";
+			e.preventDefault();
 			return;
 		}
 		if (imageUrlError) {
-			error = imageUrlError;
+			localError = imageUrlError;
+			e.preventDefault();
 			return;
 		}
-		onsubmit?.({
-			title: normalizedTitle,
-			description: description.trim() || undefined,
-			approximatePrice: parsedPrice,
-			currencyCode,
-			imageUrl: imageUrl.trim() || undefined,
-			tags,
-			links,
-		});
+
+		if (onsubmit) {
+			e.preventDefault();
+			onsubmit({
+				title: normalizedTitle,
+				description: description.trim() || undefined,
+				approximatePrice: parsedPrice,
+				currencyCode,
+				imageUrl: imageUrl.trim() || undefined,
+				tags,
+				links,
+			});
+		}
 	}
 
 	function isValidUrl(value: string): boolean {
 		try {
-			new URL(value);
-			return true;
+			const url = new URL(value);
+			return url.protocol === 'http:' || url.protocol === 'https:';
 		} catch {
 			return false;
 		}
@@ -188,18 +206,28 @@
 			target.value = "";
 		}
 	}
+
+	function fallbackAction(node: HTMLFormElement) {
+		if (enhanceHandler) return enhance(node, enhanceHandler);
+	}
 </script>
 
 <form
-	onsubmit={(e) => {
-		e.preventDefault();
-		handleSubmit();
-	}}
+	method={action ? "POST" : undefined}
+	{action}
+	onsubmit={handleSubmit}
+	use:fallbackAction
 >
+	{#if id}
+		<input type="hidden" name="id" value={id} />
+	{/if}
+	<input type="hidden" name="tags" value={JSON.stringify(tags)} />
+	<input type="hidden" name="links" value={JSON.stringify(links)} />
 	<div class="form-group">
 		<label for="wish-title">Title *</label>
 		<input
 			id="wish-title"
+			name="title"
 			bind:value={title}
 			oninput={() => (titleTouched = true)}
 			onblur={() => (titleTouched = true)}
@@ -214,6 +242,7 @@
 		<label for="wish-desc">Description</label>
 		<textarea
 			id="wish-desc"
+			name="description"
 			bind:value={description}
 			rows="3"
 			placeholder="More details…"
@@ -225,6 +254,7 @@
 		<div class="price-row">
 			<input
 				id="wish-price"
+				name="approximatePrice"
 				bind:value={priceStr}
 				type="number"
 				min="0"
@@ -235,7 +265,7 @@
 				class:field-valid={priceTouched && !priceError}
 				placeholder="0.00"
 			/>
-			<select bind:value={currencyCode} aria-label="Currency">
+			<select name="currencyCode" bind:value={currencyCode} aria-label="Currency">
 				{#each currencyOptions as currency}
 					<option value={currency.code}>{currency.label}</option>
 				{/each}
@@ -247,6 +277,7 @@
 		<label for="wish-image-url">Image URL</label>
 		<input
 			id="wish-image-url"
+			name="imageUrl"
 			bind:value={imageUrl}
 			oninput={() => (imageUrlTouched = true)}
 			onblur={() => (imageUrlTouched = true)}
