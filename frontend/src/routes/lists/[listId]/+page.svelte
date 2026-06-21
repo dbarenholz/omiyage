@@ -19,6 +19,18 @@
 		($page.url.searchParams.get('sort') as WishSortMode) || 'created-date'
 	);
 
+	let searchQuery = $derived($page.url.searchParams.get('q') || '');
+	let selectedTags = $derived(
+		$page.url.searchParams.get('tags') ? $page.url.searchParams.get('tags')!.split(',').filter(Boolean) : []
+	);
+	let tagMatchMode = $derived(
+		$page.url.searchParams.get('match') === 'any' ? 'any' : 'all'
+	);
+
+	let availableTags = $derived(
+		Array.from(new Set(wishes.flatMap(w => w.tags || []))).sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' }))
+	);
+
 	function compareWishes(a: Wish, b: Wish, mode: WishSortMode): number {
 		if (mode === 'alphabetical') {
 			const byTitle = a.title.localeCompare(b.title, 'en', { sensitivity: 'base' });
@@ -41,13 +53,65 @@
 		return a.createdAt.getTime() - b.createdAt.getTime();
 	}
 
-	let sortedWishes = $derived([...wishes].sort((a, b) => compareWishes(a, b, sortMode)));
+	let filteredWishes = $derived(wishes.filter(w => {
+		if (searchQuery) {
+			const q = searchQuery.toLowerCase();
+			const titleMatch = w.title.toLowerCase().includes(q);
+			const descMatch = (w.description || '').toLowerCase().includes(q);
+			if (!titleMatch && !descMatch) return false;
+		}
+		
+		if (selectedTags.length > 0) {
+			const wishTags = w.tags || [];
+			if (tagMatchMode === 'all') {
+				const hasAll = selectedTags.every(t => wishTags.includes(t));
+				if (!hasAll) return false;
+			} else {
+				const hasAny = selectedTags.some(t => wishTags.includes(t));
+				if (!hasAny) return false;
+			}
+		}
+
+		return true;
+	}));
+
+	let sortedWishes = $derived([...filteredWishes].sort((a, b) => compareWishes(a, b, sortMode)));
+
+	function updateFilters(updates: Record<string, string | null>) {
+		const url = new URL($page.url);
+		for (const [key, value] of Object.entries(updates)) {
+			if (value === null || value === '') {
+				url.searchParams.delete(key);
+			} else {
+				url.searchParams.set(key, value);
+			}
+		}
+		goto(url, { replaceState: true, keepFocus: true });
+	}
 
 	function handleSortChange(e: Event) {
 		const target = e.target as HTMLSelectElement;
-		const url = new URL($page.url);
-		url.searchParams.set('sort', target.value);
-		goto(url, { replaceState: true, keepFocus: true });
+		updateFilters({ sort: target.value === 'created-date' ? null : target.value });
+	}
+
+	function handleSearchInput(e: Event) {
+		const target = e.target as HTMLInputElement;
+		updateFilters({ q: target.value });
+	}
+
+	function toggleTag(tag: string) {
+		const current = new Set(selectedTags);
+		if (current.has(tag)) {
+			current.delete(tag);
+		} else {
+			current.add(tag);
+		}
+		updateFilters({ tags: current.size > 0 ? Array.from(current).join(',') : null });
+	}
+
+	function handleTagMatchChange(e: Event) {
+		const target = e.target as HTMLSelectElement;
+		updateFilters({ match: target.value === 'any' ? 'any' : null });
 	}
 
 	let showAddModal = $state(false);
@@ -138,17 +202,59 @@
 			</button>
 		</div>
 	{:else}
-		<div class="wish-list">
-			{#each sortedWishes as wish (wish.id)}
-				<WishCard
-					{wish}
-					isOwner={true}
-					canClaim={false}
-					onedit={(w) => (editingWish = w)}
-					ondelete={handleDeleteWish}
+		<div class="filter-bar">
+			<div class="search-input-wrapper">
+				<input 
+					type="search" 
+					class="search-input" 
+					placeholder="Search wishes…" 
+					value={searchQuery}
+					oninput={handleSearchInput}
 				/>
-			{/each}
+			</div>
+			<div class="tag-filters">
+				<div class="tag-logic">
+					<select value={tagMatchMode} onchange={handleTagMatchChange}>
+						<option value="all">All of</option>
+						<option value="any">Any of</option>
+					</select>
+				</div>
+				{#if availableTags.length > 0}
+					<div class="tag-pills">
+						{#each availableTags as tag}
+							<button 
+								class="tag-pill" 
+								class:active={selectedTags.includes(tag)}
+								onclick={() => toggleTag(tag)}
+							>
+								#{tag}
+							</button>
+						{/each}
+					</div>
+				{:else}
+					<span class="no-tags-msg">No tags in this list</span>
+				{/if}
+			</div>
 		</div>
+
+		{#if sortedWishes.length === 0}
+			<div class="empty-state">
+				<h3>No matches found</h3>
+				<p>Try adjusting your search or filters.</p>
+			</div>
+		{:else}
+			<div class="wish-list">
+				{#each sortedWishes as wish (wish.id)}
+					<WishCard
+						{wish}
+						isOwner={true}
+						canClaim={false}
+						onedit={(w) => (editingWish = w)}
+						ondelete={handleDeleteWish}
+					/>
+				{/each}
+			</div>
+		{/if}
 	{/if}
 </main>
 
@@ -354,6 +460,83 @@
 		select {
 			min-width: 10rem;
 			width: auto;
+		}
+	}
+
+	.filter-bar {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		margin-bottom: 1.5rem;
+		padding: 1rem;
+		background: rgba(255, 255, 255, 0.03);
+		border: 1px solid var(--border);
+		border-radius: 0.5rem;
+	}
+
+	.search-input-wrapper {
+		width: 100%;
+	}
+
+	.search-input {
+		width: 100%;
+		padding: 0.6rem 1rem;
+		border-radius: 0.5rem;
+		border: 1px solid var(--border);
+		background: rgba(0, 0, 0, 0.2);
+		color: var(--text-bright);
+		font-family: inherit;
+
+		&:focus {
+			outline: 2px solid var(--accent);
+			border-color: transparent;
+		}
+	}
+
+	.tag-filters {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+	}
+
+	.tag-logic select {
+		font-size: 0.85rem;
+		width: auto;
+	}
+
+	.no-tags-msg {
+		font-size: 0.85rem;
+		color: rgba(255, 255, 255, 0.4);
+		font-style: italic;
+	}
+
+	.tag-pills {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
+	.tag-pill {
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid var(--border);
+		border-radius: 1rem;
+		padding: 0.3rem 0.8rem;
+		font-size: 0.85rem;
+		color: var(--text);
+		cursor: pointer;
+		transition: all 0.2s;
+
+		&:hover {
+			background: rgba(255, 255, 255, 0.1);
+			color: var(--text-bright);
+		}
+
+		&.active {
+			background: var(--accent);
+			color: var(--bg);
+			border-color: var(--accent);
 		}
 	}
 
