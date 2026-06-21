@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { page } from "$app/stores";
+	import { goto } from "$app/navigation";
 	import { ApiError, getSharedList, claimWish, unclaimWish } from "$lib/api";
 	import { userStore, loadUser } from "$lib/stores";
 	import WishCard from "$lib/components/WishCard.svelte";
@@ -14,6 +15,43 @@
 
 	let shareId = $derived($page.params.shareId as string);
 	let canClaim = $derived(!!$userStore);
+
+	type WishSortMode = 'alphabetical' | 'modified-date' | 'created-date' | 'price';
+
+	let sortMode: WishSortMode = $derived(
+		($page.url.searchParams.get('sort') as WishSortMode) || 'created-date'
+	);
+
+	function compareWishes(a: Wish, b: Wish, mode: WishSortMode): number {
+		if (mode === 'alphabetical') {
+			const byTitle = a.title.localeCompare(b.title, 'en', { sensitivity: 'base' });
+			return byTitle !== 0 ? byTitle : (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+		}
+		if (mode === 'modified-date') {
+			const byModifiedAt = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+			return byModifiedAt !== 0 ? byModifiedAt : (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+		}
+		if (mode === 'price') {
+			if (a.approximatePrice === null && b.approximatePrice !== null) return -1;
+			if (b.approximatePrice === null && a.approximatePrice !== null) return 1;
+			if (a.approximatePrice !== null && b.approximatePrice !== null) {
+				const diff = a.approximatePrice - b.approximatePrice;
+				if (diff !== 0) return diff;
+			}
+			return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+		}
+		// 'created-date' or default
+		return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+	}
+
+	let sortedWishes: Wish[] = $derived(view ? [...(view as WishList).wishes].sort((a, b) => compareWishes(a, b, sortMode)) : []);
+
+	function handleSortChange(e: Event) {
+		const target = e.target as HTMLSelectElement;
+		const url = new URL($page.url);
+		url.searchParams.set('sort', target.value);
+		goto(url, { replaceState: true, keepFocus: true });
+	}
 
 	onMount(async () => {
 		await loadUser();
@@ -109,20 +147,31 @@
 			</div>
 		{:else if view}
 			<div class="list-header">
-				<h1>{view.title}</h1>
-				{#if view.description}
-					<p class="description">{view.description}</p>
-				{/if}
+				<div class="header-left">
+					<h1>{view.title}</h1>
+					{#if view.description}
+						<p class="description">{view.description}</p>
+					{/if}
+				</div>
+				<div class="sort-control">
+					<label for="sort-mode">Sort</label>
+					<select id="sort-mode" value={sortMode} onchange={handleSortChange}>
+						<option value="created-date">Creation Date</option>
+						<option value="modified-date">Modified Date</option>
+						<option value="alphabetical">Alphabetical</option>
+						<option value="price">Price</option>
+					</select>
+				</div>
 			</div>
 
-			{#if view.wishes.length === 0}
+			{#if sortedWishes.length === 0}
 				<div class="empty-state">
 					<h3>No wishes yet</h3>
 					<p>This list is empty.</p>
 				</div>
 			{:else}
 				<div class="wish-list">
-					{#each view.wishes as wish (wish.id)}
+					{#each sortedWishes as wish (wish.id)}
 						<WishCard
 							{wish}
 							isOwner={false}
@@ -163,11 +212,37 @@
 	}
 
 	.list-header {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1rem;
 		margin-bottom: 1.5rem;
+		flex-wrap: wrap;
+
+		.header-left {
+			flex: 1;
+			min-width: 0;
+		}
 
 		h1 {
 			font-size: 1.5rem;
 			margin-bottom: 0.25rem;
+		}
+	}
+
+	.sort-control {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+
+		label {
+			margin: 0;
+			font-size: 0.78rem;
+		}
+
+		select {
+			min-width: 10rem;
+			width: auto;
 		}
 	}
 

@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { enhance } from "$app/forms";
 	import { resolve } from "$app/paths";
+	import { page } from "$app/stores";
+	import { goto } from "$app/navigation";
 	import WishCard from "$lib/components/WishCard.svelte";
 	import WishForm from "$lib/components/WishForm.svelte";
 	import Modal from "$lib/components/Modal.svelte";
@@ -10,6 +12,43 @@
 
 	let wishList = $derived(data.wishList);
 	let wishes = $derived(data.wishes);
+
+	type WishSortMode = 'alphabetical' | 'modified-date' | 'created-date' | 'price';
+
+	let sortMode: WishSortMode = $derived(
+		($page.url.searchParams.get('sort') as WishSortMode) || 'created-date'
+	);
+
+	function compareWishes(a: Wish, b: Wish, mode: WishSortMode): number {
+		if (mode === 'alphabetical') {
+			const byTitle = a.title.localeCompare(b.title, 'en', { sensitivity: 'base' });
+			return byTitle !== 0 ? byTitle : (a.createdAt.getTime() - b.createdAt.getTime());
+		}
+		if (mode === 'modified-date') {
+			const byModifiedAt = b.updatedAt.getTime() - a.updatedAt.getTime();
+			return byModifiedAt !== 0 ? byModifiedAt : (a.createdAt.getTime() - b.createdAt.getTime());
+		}
+		if (mode === 'price') {
+			if (a.approximatePrice === null && b.approximatePrice !== null) return -1;
+			if (b.approximatePrice === null && a.approximatePrice !== null) return 1;
+			if (a.approximatePrice !== null && b.approximatePrice !== null) {
+				const diff = a.approximatePrice - b.approximatePrice;
+				if (diff !== 0) return diff;
+			}
+			return a.createdAt.getTime() - b.createdAt.getTime();
+		}
+		// 'created-date' or default
+		return a.createdAt.getTime() - b.createdAt.getTime();
+	}
+
+	let sortedWishes = $derived([...wishes].sort((a, b) => compareWishes(a, b, sortMode)));
+
+	function handleSortChange(e: Event) {
+		const target = e.target as HTMLSelectElement;
+		const url = new URL($page.url);
+		url.searchParams.set('sort', target.value);
+		goto(url, { replaceState: true, keepFocus: true });
+	}
 
 	let showAddModal = $state(false);
 	let formLoading = $state(false);
@@ -61,6 +100,15 @@
 			{/if}
 		</div>
 		<div class="header-actions">
+			<div class="sort-control">
+				<label for="sort-mode">Sort</label>
+				<select id="sort-mode" value={sortMode} onchange={handleSortChange}>
+					<option value="created-date">Creation Date</option>
+					<option value="modified-date">Modified Date</option>
+					<option value="alphabetical">Alphabetical</option>
+					<option value="price">Price</option>
+				</select>
+			</div>
 			<button
 				class="btn-ghost header-action-btn"
 				onclick={() => (showEditListModal = true)}>Edit</button
@@ -91,7 +139,7 @@
 		</div>
 	{:else}
 		<div class="wish-list">
-			{#each wishes as wish (wish.id)}
+			{#each sortedWishes as wish (wish.id)}
 				<WishCard
 					{wish}
 					isOwner={true}
@@ -290,6 +338,23 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+	}
+
+	.sort-control {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		min-height: 2.35rem;
+
+		label {
+			margin: 0;
+			font-size: 0.78rem;
+		}
+
+		select {
+			min-width: 10rem;
+			width: auto;
+		}
 	}
 
 	.wish-list {
